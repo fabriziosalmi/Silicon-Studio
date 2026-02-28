@@ -1,33 +1,23 @@
-const API_BASE = 'http://127.0.0.1:8000';
+export const API_BASE = 'http://127.0.0.1:8000'
 
 export interface SystemStats {
-    memory: {
-        total: number;
-        available: number;
-        used: number;
-        percent: number;
-    };
-    cpu: {
-        percent: number;
-        cores: number;
-    };
-    disk: {
-        percent: number;
-    };
+    cpu: number
+    memory: number
+    gpu: number
+    vram: number
+    active_load: number
 }
 
 export interface PreviewRow {
-    instruction: string;
-    input: string;
-    output: string;
-    [key: string]: string;
+    [key: string]: any
 }
 
 export const apiClient = {
+    API_BASE,
     monitor: {
         getStats: async (): Promise<SystemStats> => {
             const res = await fetch(`${API_BASE}/api/monitor/stats`);
-            if (!res.ok) throw new Error('Failed to fetch system stats');
+            if (!res.ok) throw new Error('Failed to fetch stats');
             return res.json();
         }
     },
@@ -41,39 +31,29 @@ export const apiClient = {
             if (!res.ok) throw new Error('Failed to preview CSV');
             return res.json();
         },
-        convertCsv: async (file_path: string, output_path: string, instruction_col: string, input_col: string | undefined, output_col: string, strip_pii: boolean, model_family: string): Promise<any> => {
+        convertCsv: async (filePath: string, outputPath: string, instructionCol: string, inputCol?: string, outputCol?: string, stripPii: boolean = false, modelFamily: string = "Llama"): Promise<any> => {
             const res = await fetch(`${API_BASE}/api/preparation/convert`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    file_path,
-                    output_path,
-                    instruction_col,
-                    input_col,
-                    output_col,
-                    strip_pii,
-                    model_family
-                })
+                body: JSON.stringify({ file_path: filePath, output_path: outputPath, instruction_col: instructionCol, input_col: inputCol, output_col: outputCol, strip_pii: stripPii, model_family: modelFamily })
             });
             if (!res.ok) throw new Error('Failed to convert CSV');
             return res.json();
-        }
-    },
-    shield: {
-        redact: async (text: string): Promise<any> => {
-            const res = await fetch(`${API_BASE}/api/shield/redact`, {
+        },
+        generateMcp: async (modelId: string, serverId: string, prompt: string, outputPath: string): Promise<any> => {
+            const res = await fetch(`${API_BASE}/api/preparation/generate-mcp`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text })
+                body: JSON.stringify({ model_id: modelId, server_id: serverId, prompt, output_path: outputPath })
             });
-            if (!res.ok) throw new Error('Failed to redact text');
+            if (!res.ok) throw new Error('Failed to generate via MCP');
             return res.json();
         }
     },
     engine: {
         getModels: async (): Promise<any[]> => {
             const res = await fetch(`${API_BASE}/api/engine/models`);
-            if (!res.ok) throw new Error('Failed to list models');
+            if (!res.ok) throw new Error('Failed to fetch models');
             return res.json();
         },
         downloadModel: async (modelId: string): Promise<any> => {
@@ -103,13 +83,13 @@ export const apiClient = {
             if (!res.ok) throw new Error('Failed to register model');
             return res.json();
         },
-        finetune: async (config: any): Promise<any> => {
-            const res = await fetch(`${API_BASE}/api/engine/finetune`, {
+        scanModels: async (path: string): Promise<any[]> => {
+            const res = await fetch(`${API_BASE}/api/engine/models/scan`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(config)
+                body: JSON.stringify({ path })
             });
-            if (!res.ok) throw new Error('Failed to start fine-tuning');
+            if (!res.ok) throw new Error('Failed to scan directory');
             return res.json();
         },
         getJobStatus: async (jobId: string): Promise<any> => {
@@ -117,15 +97,155 @@ export const apiClient = {
             if (!res.ok) throw new Error('Failed to get job status');
             return res.json();
         },
-        chat: async (modelId: string, messages: any[]): Promise<any> => {
+        finetune: async (params: any): Promise<any> => {
+            const res = await fetch(`${API_BASE}/api/engine/finetune`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(params)
+            });
+            if (!res.ok) throw new Error('Failed to start fine-tuning');
+            return res.json();
+        },
+        chat: async (modelId: string, messages: any[], params: any = {}): Promise<any> => {
             const res = await fetch(`${API_BASE}/api/engine/chat`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ model_id: modelId, messages })
+                body: JSON.stringify({ model_id: modelId, messages, ...params })
             });
-            if (!res.ok) throw new Error('Failed to generate response');
+            if (!res.ok) throw new Error('Failed to generate chat response');
+            return res.json();
+        },
+        stopChat: async (): Promise<any> => {
+            const res = await fetch(`${API_BASE}/api/engine/chat/stop`, {
+                method: 'POST'
+            });
+            if (!res.ok) throw new Error('Failed to stop chat generation');
+            return res.json();
+        },
+        exportModel: async (modelId: string, outputPath: string, qBits: number = 4): Promise<any> => {
+            const res = await fetch(`${API_BASE}/api/engine/models/export`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model_id: modelId, output_path: outputPath, q_bits: qBits })
+            });
+            if (!res.ok) throw new Error('Failed to export model');
+            return res.json();
+        },
+        loadModel: async (modelId: string): Promise<any> => {
+            const res = await fetch(`${API_BASE}/api/engine/models/load`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model_id: modelId })
+            });
+            if (!res.ok) throw new Error('Failed to load model into memory');
+            return res.json();
+        },
+        unloadModel: async (): Promise<any> => {
+            const res = await fetch(`${API_BASE}/api/engine/models/unload`, {
+                method: 'POST'
+            });
+            if (!res.ok) throw new Error('Failed to unload model');
             return res.json();
         }
+    },
+    rag: {
+        getCollections: async (): Promise<any[]> => {
+            const res = await fetch(`${API_BASE}/api/rag/collections`);
+            if (!res.ok) throw new Error('Failed to fetch collections');
+            return res.json();
+        },
+        createCollection: async (name: string): Promise<any> => {
+            const res = await fetch(`${API_BASE}/api/rag/collections`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name })
+            });
+            if (!res.ok) throw new Error('Failed to create collection');
+            return res.json();
+        },
+        deleteCollection: async (id: string): Promise<any> => {
+            const res = await fetch(`${API_BASE}/api/rag/collections/${id}`, {
+                method: 'DELETE'
+            });
+            if (!res.ok) throw new Error('Failed to delete collection');
+            return res.json();
+        },
+        ingest: async (collectionId: string, files: string[], chunkSize: number, overlap: number): Promise<any> => {
+            const res = await fetch(`${API_BASE}/api/rag/ingest`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ collection_id: collectionId, files, chunk_size: chunkSize, overlap })
+            });
+            if (!res.ok) throw new Error('Failed to ingest files');
+            return res.json();
+        }
+    },
+    agents: {
+        getAgents: async (): Promise<any[]> => {
+            const res = await fetch(`${API_BASE}/api/agents/`);
+            if (!res.ok) throw new Error('Failed to fetch agents');
+            return res.json();
+        },
+        saveAgent: async (agent: any): Promise<any> => {
+            const res = await fetch(`${API_BASE}/api/agents/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(agent)
+            });
+            if (!res.ok) throw new Error('Failed to save agent');
+            return res.json();
+        },
+        deleteAgent: async (agentId: string): Promise<any> => {
+            const res = await fetch(`${API_BASE}/api/agents/${agentId}`, {
+                method: 'DELETE'
+            });
+            if (!res.ok) throw new Error('Failed to delete agent');
+            return res.json();
+        },
+        execute: async (agentId: string, input: string): Promise<any> => {
+            const res = await fetch(`${API_BASE}/api/agents/${agentId}/execute`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ input })
+            });
+            if (!res.ok) throw new Error('Failed to execute agent');
+            return res.json();
+        }
+    },
+    deployment: {
+        start: async (modelPath: string, host: string, port: number): Promise<any> => {
+            const res = await fetch(`${API_BASE}/api/deployment/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model_path: modelPath, host, port })
+            });
+            if (!res.ok) throw new Error('Failed to start deployment');
+            return res.json();
+        },
+        stop: async (): Promise<any> => {
+            const res = await fetch(`${API_BASE}/api/deployment/stop`, {
+                method: 'POST'
+            });
+            if (!res.ok) throw new Error('Failed to stop deployment');
+            return res.json();
+        },
+        getStatus: async (): Promise<any> => {
+            const res = await fetch(`${API_BASE}/api/deployment/status`);
+            if (!res.ok) throw new Error('Failed to fetch deployment status');
+            return res.json();
+        },
+        list: async (): Promise<any[]> => {
+            const res = await fetch(`${API_BASE}/api/deployment/list`);
+            if (!res.ok) throw new Error('Failed to list deployments');
+            return res.json();
+        }
+    },
+    checkHealth: async (): Promise<boolean> => {
+        try {
+            const res = await fetch(`${API_BASE}/health`);
+            return res.ok;
+        } catch {
+            return false;
+        }
     }
-};
-
+}

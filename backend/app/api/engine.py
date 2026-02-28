@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, BackgroundTasks
 from pydantic import BaseModel
 from typing import Dict, Any
 import uuid
+from typing import Dict, Any, List
 from app.engine.service import MLXEngineService
 
 router = APIRouter()
@@ -88,15 +89,91 @@ async def register_model(request: RegisterRequest):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class ScanRequest(BaseModel):
+    path: str
+
+@router.post("/models/scan")
+async def scan_models(request: ScanRequest):
+    """
+    Scan a directory for MLX models.
+    """
+    try:
+        found = service.scan_directory(request.path)
+        return found
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class LoadModelRequest(BaseModel):
+    model_id: str
+
+@router.post("/models/load")
+async def load_model(request: LoadModelRequest):
+    """Load a model into active memory (Apple Silicon unified memory)."""
+    try:
+        await service.load_active_model(request.model_id)
+        return {"status": "loaded", "model_id": request.model_id}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/models/unload")
+async def unload_model():
+    """Unload the currently active model and free VRAM."""
+    try:
+        service.unload_model()
+        return {"status": "unloaded"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
 class ChatRequest(BaseModel):
     model_id: str
     messages: list
     temperature: float = 0.7
+    max_tokens: int = 512
+    top_p: float = 0.9
+    repetition_penalty: float = 1.1
+
+from fastapi.responses import StreamingResponse
+import json
 
 @router.post("/chat")
 async def chat_generation(request: ChatRequest):
     """
-    Generate a response from the model.
+    Generate a response from the model with streaming support (SSE).
     """
-    response = await service.generate_response(request.model_id, request.messages)
-    return response
+    params = request.model_dump()
+    model_id = params.pop("model_id")
+    messages = params.pop("messages")
+    
+    async def event_generator():
+        try:
+            async for chunk in service.generate_stream(model_id, messages, **params):
+                # SSE Format: data: <json>\n\n
+                yield f"data: {json.dumps(chunk)}\n\n"
+        except Exception as e:
+            yield f"data: {json.dumps({'error': str(e)})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
+
+@router.post("/chat/stop")
+async def stop_generation():
+    """
+    Kill switch to stop current generation.
+    """
+    service.stop_generation()
+    return {"status": "stopped"}
+
+class ExportRequest(BaseModel):
+    model_id: str
+    output_path: str
+    q_bits: int = 4
+
+@router.post("/models/export")
+async def export_model(request: ExportRequest):
+    """
+    Export and quantize a model.
+    """
+    try:
+        result = await service.export_model(request.model_id, request.output_path, request.q_bits)
+        return result
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

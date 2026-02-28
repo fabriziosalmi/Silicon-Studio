@@ -48,12 +48,12 @@ export function MemoryTetris() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 {/* RAM Block */}
-                <div className="bg-black/20 p-6 rounded-xl border border-white/10">
-                    <div className="flex justify-between items-end mb-2">
-                        <span className="text-sm font-bold text-gray-400 uppercase">Unified Memory</span>
-                        <span className="text-2xl font-mono text-white">{stats.memory.percent}%</span>
+                <div className="bg-black/20 p-5 rounded-xl border border-white/10 shadow-inner">
+                    <div className="flex justify-between items-end mb-3">
+                        <span className="text-[11px] font-bold text-gray-500 tracking-widest uppercase">Unified Memory</span>
+                        <span className="text-xl font-mono text-gray-300">{stats.memory.percent}%</span>
                     </div>
-                    <div className="h-32 bg-gray-800 rounded-lg overflow-hidden flex flex-col-reverse relative">
+                    <div className="h-24 bg-black/40 rounded-lg overflow-hidden flex flex-col-reverse relative border border-white/5">
                         {/* Visualizing "Tetris" blocks */}
                         <div
                             className="w-full bg-gradient-to-t from-blue-600 to-cyan-400 transition-all duration-500 ease-in-out"
@@ -73,14 +73,14 @@ export function MemoryTetris() {
                 </div>
 
                 {/* CPU Block */}
-                <div className="bg-black/20 p-6 rounded-xl border border-white/10">
-                    <div className="flex justify-between items-end mb-2">
-                        <span className="text-sm font-bold text-gray-400 uppercase">CPU Load</span>
-                        <span className="text-2xl font-mono text-white">{stats.cpu.percent}%</span>
+                <div className="bg-black/20 p-5 rounded-xl border border-white/10 shadow-inner">
+                    <div className="flex justify-between items-end mb-3">
+                        <span className="text-[11px] font-bold text-gray-500 tracking-widest uppercase">CPU Load</span>
+                        <span className="text-xl font-mono text-gray-300">{stats.cpu.percent}%</span>
                     </div>
-                    <div className="h-32 flex items-end space-x-1">
+                    <div className="h-24 flex items-end space-x-1">
                         {/* Making a fake history chart or just current bar per core could be cool, keeping it simple for now */}
-                        <div className="w-full h-full bg-gray-800 rounded-lg overflow-hidden relative">
+                        <div className="w-full h-full bg-black/40 rounded-lg overflow-hidden relative border border-white/5">
                             <div
                                 className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-purple-600 to-pink-400 transition-all duration-300"
                                 style={{ height: `${stats.cpu.percent}%` }}
@@ -95,14 +95,14 @@ export function MemoryTetris() {
             </div>
 
             {/* Disk Info (Quick Bar) */}
-            <div className="bg-black/20 p-4 rounded-xl border border-white/10">
-                <div className="flex justify-between items-center mb-1">
-                    <span className="text-xs font-bold text-gray-500 uppercase">Local Storage</span>
-                    <span className="text-xs text-gray-400">{stats.disk.percent.toFixed(1)}% Used</span>
+            <div className="bg-black/20 p-4 rounded-xl border border-white/10 shadow-inner">
+                <div className="flex justify-between items-center mb-2">
+                    <span className="text-[11px] font-bold text-gray-500 tracking-widest uppercase">Local Storage</span>
+                    <span className="text-[11px] font-mono text-gray-400">{stats.disk.percent.toFixed(1)}% Used</span>
                 </div>
-                <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
+                <div className="h-1.5 bg-black/60 rounded-full overflow-hidden border border-white/5">
                     <div
-                        className="h-full bg-yellow-500 transition-all duration-1000"
+                        className="h-full bg-yellow-500/80 transition-all duration-1000 shadow-[0_0_10px_rgba(234,179,8,0.5)]"
                         style={{ width: `${stats.disk.percent}%` }}
                     />
                 </div>

@@ -7,14 +7,20 @@ import { EngineInterface } from './components/EngineInterface'
 
 
 import { ModelsInterface } from './components/ModelsInterface'
+import { Evaluations } from './components/Evaluations'
+import { RagKnowledge } from './components/RagKnowledge'
+import { AgentWorkflows } from './components/AgentWorkflows'
+import { Deployment } from './components/Deployment'
+import { Workspace } from './components/Workspace'
+import { TopBar } from './components/TopBar'
+import { useGlobalState } from './context/GlobalState'
+import { apiClient } from './api/client'
+import { Database, Cpu, MessageSquare, BarChart2, TestTube, Brain, Zap, Rocket, FileText } from 'lucide-react'
 
 function App() {
   const [activeTab, setActiveTab] = useState('models')
-
-  const [backendReady, setBackendReady] = useState(false)
+  const { backendReady, setBackendReady } = useGlobalState()
   const [loadingMessage, setLoadingMessage] = useState('Initializing backend...')
-
-
 
   const displayedTab = activeTab
 
@@ -25,9 +31,8 @@ function App() {
 
     const checkBackend = async () => {
       try {
-        const response = await fetch('http://127.0.0.1:8000/health');
-        if (response.ok && !cancelled) {
-          setBackendReady(true);
+        const ok = await apiClient.checkHealth();
+        if (ok && !cancelled) {
           setBackendReady(true);
         }
       } catch {
@@ -71,54 +76,82 @@ function App() {
   return (
     <div className="h-screen w-screen flex flex-col bg-transparent">
 
-
-      {/* Titlebar / Drag Region */}
-      <div className="h-10 w-full drag-region shimmer-bg flex items-center justify-center relative">
-        <span className="text-sm font-medium text-gray-400">Silicon Studio</span>
-      </div>
+      {/* Modern Top Status Bar */}
+      <TopBar />
 
       {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden rounded-bl-lg rounded-br-lg border-t border-white/10 bg-[rgba(30,30,30,0.8)] backdrop-blur-xl">
+      <div className="flex-1 flex overflow-hidden rounded-bl-lg rounded-br-lg border-t border-white/10 bg-[rgba(20,20,20,0.7)] backdrop-blur-3xl shadow-[inset_0_2px_20px_rgba(255,255,255,0.02)]">
 
         {/* Sidebar */}
-        <div className="w-64 bg-black/20 flex flex-col p-4 border-r border-white/5 relative z-20">
-          <div className="mb-6 px-2">
-            <h1 className="text-xl font-bold tracking-tight bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">Silicon Studio</h1>
-          </div>
+        <div className="w-64 bg-black/40 backdrop-blur-md flex flex-col p-4 pt-6 border-r border-white/5 relative z-20 shadow-[10px_0_30px_rgba(0,0,0,0.5)]">
 
-          <nav className="space-y-1">
-            <SidebarItem
-              label="Models"
-              active={activeTab === 'models'}
-              onClick={() => setActiveTab('models')}
-              icon="💾"
-            />
-            <SidebarItem
-              label="Fine-Tuning"
-              active={activeTab === 'engine'}
-              onClick={() => setActiveTab('engine')}
-              icon="🤖"
-            />
-            <SidebarItem
-              label="Chat"
-              active={activeTab === 'chat'}
-              onClick={() => setActiveTab('chat')}
-              icon="💬"
-            />
+          <nav className="space-y-6">
 
+            <div>
+              <div className="px-3 mb-2 text-[10px] font-bold tracking-wider text-gray-500 uppercase">Local Server</div>
+              <div className="space-y-1">
+                <SidebarItem
+                  label="Models"
+                  active={activeTab === 'models'}
+                  onClick={() => setActiveTab('models')}
+                  icon={<Database size={18} />}
+                />
+                <SidebarItem
+                  label="Chat"
+                  active={activeTab === 'chat'}
+                  onClick={() => setActiveTab('chat')}
+                  icon={<MessageSquare size={18} />}
+                />
+                <SidebarItem
+                  label="AI Notepad"
+                  active={activeTab === 'workspace'}
+                  onClick={() => setActiveTab('workspace')}
+                  icon={<FileText size={18} />}
+                />
+              </div>
+            </div>
 
-
-            <SidebarItem
-              label="Data Preparation"
-              active={activeTab === 'studio'}
-              onClick={() => setActiveTab('studio')}
-              icon="📊"
-            />
-
-            <LockedSidebarItem label="Evaluations" icon="🧪" isLocked={true} onClick={() => { }} tooltip="Feature coming soon!" />
-            <LockedSidebarItem label="RAG Knowledge" icon="🧠" isLocked={true} onClick={() => { }} tooltip="Feature coming soon!" />
-            <LockedSidebarItem label="Agent Workflows" icon="⚡" isLocked={true} onClick={() => { }} tooltip="Feature coming soon!" />
-            <LockedSidebarItem label="Deployment" icon="🚀" isLocked={true} onClick={() => { }} tooltip="Feature coming soon!" />
+            <div>
+              <div className="px-3 mb-2 text-[10px] font-bold tracking-wider text-gray-500 uppercase">Advanced Tools</div>
+              <div className="space-y-1">
+                <SidebarItem
+                  label="Data Preparation"
+                  active={activeTab === 'studio'}
+                  onClick={() => setActiveTab('studio')}
+                  icon={<BarChart2 size={18} />}
+                />
+                <SidebarItem
+                  label="Fine-Tuning Engine"
+                  active={activeTab === 'engine'}
+                  onClick={() => setActiveTab('engine')}
+                  icon={<Cpu size={18} />}
+                />
+                <SidebarItem
+                  label="Model Evaluations"
+                  active={activeTab === 'evaluations'}
+                  onClick={() => setActiveTab('evaluations')}
+                  icon={<TestTube size={18} />}
+                />
+                <SidebarItem
+                  label="RAG Knowledge"
+                  active={activeTab === 'rag'}
+                  onClick={() => setActiveTab('rag')}
+                  icon={<Brain size={18} />}
+                />
+                <SidebarItem
+                  label="Agent Workflows"
+                  active={activeTab === 'agents'}
+                  onClick={() => setActiveTab('agents')}
+                  icon={<Zap size={18} />}
+                />
+                <SidebarItem
+                  label="Deployment Hub"
+                  active={activeTab === 'deployment'}
+                  onClick={() => setActiveTab('deployment')}
+                  icon={<Rocket size={18} />}
+                />
+              </div>
+            </div>
 
           </nav>
 
@@ -129,11 +162,7 @@ function App() {
 
         <div className="flex-1 overflow-y-auto no-drag relative">
 
-          <div className={
-            displayedTab === 'models' ? "h-full" :
-              (displayedTab === 'engine' || displayedTab === 'studio') ? "max-w-7xl mx-auto h-full p-8" :
-                "max-w-4xl mx-auto h-full p-8"
-          }>
+          <div className="w-full h-full max-w-7xl mx-auto p-4 md:p-8 overflow-x-hidden">
             {displayedTab === 'studio' && <DataPreparation />}
             {displayedTab === 'models' && <ModelsInterface />}
             {displayedTab === 'engine' && (
@@ -146,7 +175,12 @@ function App() {
                 <EngineInterface />
               </div>
             )}
+            {displayedTab === 'evaluations' && <Evaluations />}
+            {displayedTab === 'rag' && <RagKnowledge />}
+            {displayedTab === 'agents' && <AgentWorkflows />}
+            {displayedTab === 'deployment' && <Deployment />}
             {displayedTab === 'chat' && <ChatInterface />}
+            {displayedTab === 'workspace' && <Workspace />}
           </div>
         </div>
 
@@ -155,43 +189,17 @@ function App() {
   )
 }
 
-function SidebarItem({ label, active, onClick, icon }: { label: string, active: boolean, onClick: () => void, icon: string }) {
+function SidebarItem({ label, active, onClick, icon }: { label: string, active: boolean, onClick: () => void, icon: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full flex items-center space-x-3 px-3 py-2 rounded-md text-sm font-medium transition-all ${active
-        ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20'
-        : 'text-gray-400 hover:bg-white/5 hover:text-white'
+      className={`w-full flex items-center space-x-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all duration-300 group ${active
+        ? 'bg-gradient-to-r from-blue-600/20 to-indigo-600/10 text-white border border-blue-500/30 shadow-[0_0_15px_rgba(59,130,246,0.15)] ring-1 ring-inset ring-white/5'
+        : 'text-gray-400 hover:bg-white/10 hover:text-white border border-transparent hover:shadow-lg'
         }`}
     >
-      <span>{icon}</span>
-      <span>{label}</span>
-    </button>
-  )
-}
-
-function LockedSidebarItem({ label, icon, onHover, tooltip, isLocked = true, onClick }: { label: string, icon: string, onHover?: (hovering: boolean) => void, tooltip?: string, isLocked?: boolean, onClick?: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className={`w-full flex items-center justify-between px-3 py-2 rounded-md text-sm font-medium select-none group relative transition-all ${isLocked
-        ? 'text-gray-600 opacity-50 hover:opacity-80 cursor-pointer'
-        : 'text-gray-400 hover:bg-white/5 hover:text-white cursor-pointer'
-        }`}
-      onMouseEnter={() => onHover && onHover(true)}
-      onMouseLeave={() => onHover && onHover(false)}
-    >
-      <div className="flex items-center space-x-3">
-        <span className={isLocked ? "grayscale" : ""}>{icon}</span>
-        <span>{label}</span>
-      </div>
-      {isLocked && <span className="text-xs opacity-50">🔒</span>}
-
-      {tooltip && (
-        <div className="absolute left-full ml-2 top-1/2 -translate-y-1/2 w-max px-3 py-1.5 bg-black/90 border border-white/10 text-xs text-white rounded-md shadow-xl opacity-0 group-hover:opacity-100 pointer-events-none transition-opacity z-50 whitespace-nowrap">
-          {tooltip}
-        </div>
-      )}
+      <span className={`flex items-center justify-center w-5 h-5 transition-all duration-300 ${active ? 'opacity-100 text-blue-400 drop-shadow-[0_0_8px_rgba(96,165,250,0.6)]' : 'opacity-70 group-hover:opacity-100 group-hover:drop-shadow-[0_0_8px_rgba(255,255,255,0.3)]'}`}>{icon}</span>
+      <span className="tracking-wide">{label}</span>
     </button>
   )
 }

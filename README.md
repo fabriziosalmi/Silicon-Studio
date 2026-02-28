@@ -99,6 +99,17 @@ Contributions are welcome! We want to make local AI accessible to everyone. Refa
 4. Push to the Branch (`git push origin feature/AmazingFeature`)
 5. Open a Pull Request
 
+### 🛠️ Troubleshooting
+
+#### macOS: "Silicon Studio.app is damaged and can't be opened"
+If you see this error on macOS, it's typically because the app is not code-signed. To fix it, run the following command in your terminal:
+
+```bash
+xattr -cr "/Applications/Silicon Studio.app"
+```
+
+---
+
 ## 📄 License
 
 Distributed under the MIT License. See `LICENSE` for more information.

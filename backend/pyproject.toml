@@ -1,5 +1,5 @@
 [project]
-name = "perimeter-backend"
+name = "silicon-studio-backend"
 version = "0.1.0"
 description = "Local-first LLM fine-tuning backend for Perimeter.ai"
 readme = "README.md"

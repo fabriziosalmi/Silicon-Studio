@@ -1,11 +1,14 @@
-import asyncio
-import os
-import threading
-from typing import Dict, Any, List
-from pathlib import Path
 from mlx_lm import load, generate
 from mlx_lm.tuner import train, TrainingArgs
 from mlx_lm.utils import load_adapters
+import mlx.core as mx
+import gc
+import asyncio
+import threading
+import os
+import json
+from pathlib import Path
+from typing import Dict, Any, List
 
 # Define a curated list of supported models for the UI
 # Default curated list (MLX Community only, as requested)
@@ -13,13 +16,27 @@ DEFAULT_MODELS = []
 
 class MLXEngineService:
     def __init__(self):
+        # Resolve Workspace Directory (Absolute)
+        self.workspace_dir = Path(__file__).parent.parent.parent.parent.absolute()
         self.active_jobs = {}
-        self.active_downloads = set() # Track active downloads logic
-        self.loaded_models = {}
-        self.models_dir = Path("models")
-        self.models_dir.mkdir(exist_ok=True)
-        self.adapters_dir = Path("adapters")
-        self.adapters_dir.mkdir(exist_ok=True)
+        self.active_downloads = set()
+        self.active_model_id = None
+        self.active_model = None
+        self.active_tokenizer = None
+        self.stop_event = threading.Event()
+        self.generation_lock = asyncio.Lock()
+        self.models_dir = self.workspace_dir / "models"
+        self.adapters_dir = self.workspace_dir / "adapters"
+        
+        self.models_dir.mkdir(parents=True, exist_ok=True)
+        self.adapters_dir.mkdir(parents=True, exist_ok=True)
+        
+        # New for Phase 9: Auto-discover local models
+        self.discovery_paths = [
+            Path("~/.lmstudio/models").expanduser(),
+            Path("~/.ollama/models").expanduser(),
+            Path("~/.cache/huggingface/hub").expanduser()
+        ]
         
         # PROD FIX: Check multiple locations for models.json
         possible_paths = [
@@ -40,6 +57,22 @@ class MLXEngineService:
                 break
                 
         self.models_config = self._load_models_config()
+        self._run_auto_discovery()
+
+    def _run_auto_discovery(self):
+        """Phase 9: Seamless local LLM integration."""
+        print("Running SOTA Model Auto-Discovery...")
+        discovered_count = 0
+        for path in self.discovery_paths:
+            if path.exists():
+                print(f"Scanning discovery path: {path}")
+                try:
+                    # Registry logic handles deduplication internally
+                    models = self.register_model(name=f"Local / {path.name.replace('-',' ').title()}", path=str(path))
+                    discovered_count += len(models)
+                except Exception as e:
+                    print(f"Discovery skip for {path}: {e}")
+        print(f"Auto-Discovery complete. Found {discovered_count} new local models.")
 
     def _load_models_config(self):
         # Load directly from models.json as the source of truth
@@ -80,30 +113,153 @@ class MLXEngineService:
             print(f"Error calculating size for {path}: {e}")
             return "Unknown"
 
+    def _get_model_metadata(self, model_path: Path) -> Dict[str, Any]:
+        """
+        Extracts industry-standard metadata from the file headers.
+        Supports: config.json (Transformers), .gguf (Llama.cpp), .safetensors (HF)
+        """
+        meta = {
+            "architecture": "Unknown",
+            "context_window": "Unknown",
+            "quantization": "Standard"
+        }
+        
+        # 1. Transformers config.json
+        config_path = model_path / "config.json"
+        if config_path.exists():
+            try:
+                import json
+                with open(config_path, "r") as f:
+                    config = json.load(f)
+                    if "model_type" in config:
+                        meta["architecture"] = config["model_type"].capitalize()
+                    for key in ["max_position_embeddings", "model_max_length", "n_ctx", "max_sequence_length"]:
+                        if key in config:
+                            val = config[key]
+                            meta["context_window"] = f"{val // 1024}k" if val > 1000 else str(val)
+                            break
+                    if "quantization" in config:
+                        q = config["quantization"]
+                        meta["quantization"] = f"{q['bits']}-bit" if isinstance(q, dict) and "bits" in q else str(q)
+            except: pass
+
+        # 2. GGUF Parsing (Quick Scanner)
+        gguf_files = list(model_path.glob("*.gguf"))
+        if gguf_files:
+            try:
+                # GGUF has a specific binary header. We just peek for the 'GGUF' magic and common keys
+                with open(gguf_files[0], "rb") as f:
+                    chunk = f.read(1024).decode('utf-8', 'ignore')
+                    if "GGUF" in chunk:
+                        meta["architecture"] = "GGUF"
+                        if "q4_k_m" in chunk.lower(): meta["quantization"] = "Q4_K_M"
+                        elif "q8_0" in chunk.lower(): meta["quantization"] = "Q8_0"
+            except: pass
+
+        # 3. Refine by folder/file names (Industry Fallback)
+        name_lower = model_path.name.lower()
+        if meta["quantization"] == "Standard":
+            if "4bit" in name_lower or "q4" in name_lower: meta["quantization"] = "4-bit"
+            elif "8bit" in name_lower or "q8" in name_lower: meta["quantization"] = "8-bit"
+            elif "fp16" in name_lower: meta["quantization"] = "FP16"
+
+        return meta
+
+    def scan_directory(self, path: str, max_depth=4) -> List[Dict[str, Any]]:
+        """
+        Scans a directory for MLX models and returns a list of found models with metadata.
+        Does NOT register them.
+        """
+        target_path = Path(path).expanduser().resolve()
+        if not target_path.exists():
+            return []
+            
+        found_models = []
+        
+        def _scan(dir_path: Path, depth: int):
+            if depth > max_depth:
+                return
+            
+            # Check if this folder is a model
+            if (dir_path / "config.json").exists():
+                meta = self._get_model_metadata(dir_path)
+                found_models.append({
+                    "id": str(dir_path),
+                    "name": dir_path.name,
+                    "path": str(dir_path),
+                    "size": self._get_dir_size_str(dir_path),
+                    "architecture": meta.get("architecture"),
+                    "context_window": meta.get("context_window"),
+                    "quantization": meta.get("quantization")
+                })
+                # Don't recurse into model folders
+                return
+            
+            # Check for GGUF folder (informational)
+            if any(dir_path.glob("*.gguf")):
+                # We could add GGUF detection here if we want to show them in UI
+                pass
+
+            try:
+                for child in sorted(list(dir_path.iterdir())):
+                    if child.is_dir() and not child.name.startswith('.'):
+                        if child.name.lower() in ["node_modules", "venv", ".git", "__pycache__", "site-packages"]:
+                            continue
+                        _scan(child, depth + 1)
+            except Exception:
+                pass
+
+        _scan(target_path, 0)
+        return found_models
+
     def register_model(self, name: str, path: str, url: str = ""):
         """
-        Registers a custom model.
-        Path should be the absolute path to the local model folder.
+        Registers a custom model from a local path.
+        If path is a directory of models, it registers all found models.
         """
-        for m in self.models_config:
-             if m['name'] == name:
-                 raise ValueError(f"Model with name {name} already exists.")
+        target_path = Path(path).expanduser().resolve()
+        if not target_path.exists():
+            raise ValueError(f"Directory {path} does not exist.")
+            
+        # If the path itself is a model, register just it
+        if (target_path / "config.json").exists():
+            return [self._register_single_path(target_path, name, url)]
+            
+        # Otherwise scan and register all
+        found = self.scan_directory(str(target_path))
+        if not found:
+             raise ValueError(f"No valid MLX models found in {path}. Make sure the folders contain 'config.json'.")
+             
+        added = []
+        for m in found:
+            added.append(self._register_single_path(Path(m["path"]), name, url))
         
-        # Calculate size immediately
-        size_str = self._get_dir_size_str(Path(path))
+        self._save_models_config()
+        return added
 
+    def _register_single_path(self, model_path: Path, group_name: str, url: str):
+        # Check if already registered
+        for m in self.models_config:
+             if m['id'] == str(model_path):
+                 return m
+        
+        model_name = model_path.name
+        size_str = self._get_dir_size_str(model_path)
+        meta = self._get_model_metadata(model_path)
+        
         new_model = {
-            "id": path, # Use absolute path as ID for local loading
-            "name": name,
+            "id": str(model_path),
+            "name": f"{group_name} / {model_name}" if group_name and group_name.lower() not in ["", "ollama models", "lm studio models"] else model_name,
             "size": size_str,
-            "family": "Custom",
+            "family": meta.get("architecture", "Custom"),
+            "architecture": meta.get("architecture", "Unknown"),
+            "context_window": meta.get("context_window", "Unknown"),
+            "quantization": meta.get("quantization", "Standard"),
             "url": url,
             "external": False, 
             "is_custom": True
         }
-        
         self.models_config.append(new_model)
-        self._save_models_config()
         return new_model
 
     def list_models(self):
@@ -127,44 +283,170 @@ class MLXEngineService:
                 if (local_path / ".completed").exists():
                     path_to_load = str(local_path)
             
-            print(f"Loading from: {path_to_load}")
+    async def load_active_model(self, model_id: str):
+        """
+        Loads a model and tokenizer into active memory, replacing any previously loaded model.
+        Includes VRAM cleanup for Apple Silicon.
+        """
+        async with self.generation_lock:
+            await self._load_model_impl(model_id)
 
-            # This loads the model weights into memory. API calls might timeout if this takes too long.
-            # ideally this should be async or backgrounded, but for MVP we wait.
-            # Running in an executor to avoid blocking the event loop entirely
-            loop = asyncio.get_running_loop()
-            model, tokenizer = await loop.run_in_executor(None, load, path_to_load)
-            self.loaded_models[model_id] = (model, tokenizer)
-        return self.loaded_models[model_id]
+    async def _load_model_impl(self, model_id: str):
+        """Internal model loading without lock (caller must hold the lock)."""
+        if self.active_model_id == model_id and self.active_model and self.active_tokenizer:
+            print(f"Model {model_id} is already active.")
+            return
 
-    async def generate_response(self, model_id: str, messages: list):
+        # 0. VRAM Cleanup
+        if self.active_model:
+            print(f"Unloading previous model {self.active_model_id}...")
+            self.active_model = None
+            self.active_tokenizer = None
+            self.active_model_id = None
+            gc.collect()
+            mx.metal.clear_cache()
+            print("VRAM cache cleared.")
+
+        print(f"Loading model: {model_id}")
+        
+        # 1. Resolve Path
+        path_to_load = model_id
+        if Path(model_id).is_absolute() and Path(model_id).exists():
+             path_to_load = model_id
+        else:
+            sanitized_name = model_id.replace("/", "--")
+            local_path = self.models_dir / sanitized_name
+            if (local_path / ".completed").exists() or local_path.exists():
+                path_to_load = str(local_path.absolute())
+        
+        # Final safety check: ensure path is absolute
+        p = Path(path_to_load)
+        if not p.is_absolute():
+            # If not absolute and not found in models_dir, it might be a HuggingFace ID
+            # mlx_lm.load handles HF IDs, but we prefer local absolute paths if they exist
+            print(f"Warning: Loading via ID or relative path: {path_to_load}")
+        else:
+            path_to_load = str(p.absolute())
+
+        print(f"Loading from: {path_to_load}")
+
+        loop = asyncio.get_running_loop()
         try:
-            model, tokenizer = await self.get_model_and_tokenizer(model_id)
+            model, tokenizer = await loop.run_in_executor(None, load, path_to_load)
             
-            # Simple prompt construction for MVP (chat template handling varies by model)
-            # For simplicity, we just concatenate or use apply_chat_template if available.
-            # Using tokenizer.apply_chat_template is preferred if supported.
-            if hasattr(tokenizer, "apply_chat_template"):
-                prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-            else:
-                 # Fallback for models without chat template config
-                prompt = messages[-1]['content']
-
-            # Run generation in executor
-            loop = asyncio.get_running_loop()
-            response_text = await loop.run_in_executor(
-                None, 
-                lambda: generate(model, tokenizer, prompt=prompt, max_tokens=200, verbose=True)
-            )
-
-            return {
-                "role": "assistant",
-                "content": response_text,
-                "usage": {"total_tokens": len(response_text)} # Placeholder usage
-            }
+            self.active_model_id = model_id
+            self.active_model = model
+            self.active_tokenizer = tokenizer
+            print(f"Model {model_id} loaded and set as active.")
         except Exception as e:
-            print(f"Generation error: {e}")
-            return {"role": "assistant", "content": f"Error generating response: {str(e)}"}
+            print(f"Failed to load model {model_id}: {e}")
+            raise e
+
+    def unload_model(self):
+        """Explicitly unload the active model and free VRAM."""
+        if self.active_model:
+            print(f"Unloading model {self.active_model_id}...")
+            self.active_model = None
+            self.active_tokenizer = None
+            self.active_model_id = None
+            gc.collect()
+            mx.metal.clear_cache()
+            print("Model unloaded and VRAM cache cleared.")
+        else:
+            print("No model currently loaded.")
+
+    def stop_generation(self):
+        """Sets the stop event to interrupt MLX generation."""
+        self.stop_event.set()
+        print("Stop signal sent to generation loop.")
+
+    async def generate_stream(self, model_id: str, messages: list, **kwargs):
+        """
+        Inference loop with streaming (SSE).
+        Rationale: Token-by-token generation for FAANG/SOTA experience.
+        """
+        async with self.generation_lock:
+            try:
+                # 1. Ensure model is loaded
+                if self.active_model_id != model_id:
+                    await self._load_model_impl(model_id)
+                
+                model = self.active_model
+                tokenizer = self.active_tokenizer
+                if not model or not tokenizer:
+                    yield {"error": "Model not loaded"}
+                    return
+
+                # 2. Prepare Prompt
+                if hasattr(tokenizer, "apply_chat_template"):
+                    prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+                else:
+                    prompt = messages[-1]['content']
+
+                # 3. Reset Stop Event
+                self.stop_event.clear()
+
+                # 4. Stream Generation
+                temp = kwargs.get("temperature", 0.7)
+                max_tokens = kwargs.get("max_tokens", 512)
+                top_p = kwargs.get("top_p", 0.9)
+                repetition_penalty = kwargs.get("repetition_penalty", 1.1)
+
+                loop = asyncio.get_running_loop()
+                
+                # MLX generate is a generator, we run it in a thread and yield tokens
+                def _generate_iter():
+                    from mlx_lm import stream_generate
+                    from mlx_lm.sample_utils import make_sampler, make_logits_processors
+
+                    sampler = make_sampler(temp=temp, top_p=top_p)
+                    logits_processors = make_logits_processors(repetition_penalty=repetition_penalty)
+
+                    for response in stream_generate(
+                        model, 
+                        tokenizer, 
+                        prompt=prompt, 
+                        max_tokens=max_tokens, 
+                        sampler=sampler,
+                        logits_processors=logits_processors
+                    ):
+                        if self.stop_event.is_set():
+                            break
+                        # response is a GenerationResponse dataclass with .text, .generation_tps, etc.
+                        yield response.text
+
+                # Iterate over the blocking generator in an executor
+                # We use a sentinel to avoid StopIteration issues with asyncio futures
+                _SENTINEL = object()
+                
+                def _next_token(gen):
+                    try:
+                        return next(gen)
+                    except StopIteration:
+                        return _SENTINEL
+                
+                gen = _generate_iter()
+                while True:
+                    token_text = await loop.run_in_executor(None, _next_token, gen)
+                    if token_text is _SENTINEL:
+                        break
+                    yield {"text": token_text, "done": False}
+                
+                yield {"text": "", "done": True}
+
+            except Exception as e:
+                print(f"Streaming error: {e}")
+                yield {"error": str(e)}
+
+    async def generate_response(self, model_id: str, messages: list, **kwargs) -> Dict[str, Any]:
+        """
+        Legacy wrapper for generate_stream to return a full object.
+        """
+        full_text = ""
+        async for chunk in self.generate_stream(model_id, messages, **kwargs):
+            if "text" in chunk:
+                full_text += chunk["text"]
+        return {"role": "assistant", "content": full_text}
 
     async def start_finetuning(self, job_id: str, config: Dict[str, Any]):
         job_name = config.get("job_name", "")
@@ -649,4 +931,36 @@ class MLXEngineService:
                 return False
         except Exception as e:
             print(f"Failed to delete {model_id}: {e}")
+            raise e
+
+    async def export_model(self, model_id: str, output_path: str, q_bits: int = 4):
+        """
+        Phase 9: Professional Export with Quantization.
+        Fuses adapters with base model and applies quantization.
+        """
+        config = self._get_model_config_by_id(model_id)
+        if not config:
+            raise ValueError("Model not found")
+        
+        base_model = config["base_model"] if config.get("is_finetuned") else model_id
+        adapter_path = config.get("adapter_path")
+        
+        print(f"Exporting model {model_id} to {output_path} (Quant: {q_bits} bits)...")
+        
+        from mlx_lm import fuse
+        
+        # fuse() handles quantization if q_bits is provided
+        # We run this in an executor to avoid blocking the event loop
+        loop = asyncio.get_running_loop()
+        try:
+            await loop.run_in_executor(None, lambda: fuse(
+                model=base_model,
+                adapter_path=adapter_path,
+                save_path=output_path,
+                q_bits=q_bits
+            ))
+            print(f"Model exported successfully to {output_path}")
+            return {"status": "success", "path": output_path}
+        except Exception as e:
+            print(f"Export failed: {e}")
             raise e
