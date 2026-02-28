@@ -37,7 +37,7 @@ export function EngineInterface() {
     const [loading, setLoading] = useState(false)
     const [chartData, setChartData] = useState<any[]>([])
     const [exporting, setExporting] = useState(false)
-    const [exportPath, setExportPath] = useState('~/Documents/Silicon-Studio/Exports')
+    const [exportPath] = useState('~/Documents/Silicon-Studio/Exports')
 
     useEffect(() => {
         apiClient.engine.getModels().then((data: any[]) => {

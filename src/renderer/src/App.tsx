@@ -34,16 +34,18 @@ function App() {
         const ok = await apiClient.checkHealth();
         if (ok && !cancelled) {
           setBackendReady(true);
+          return;
         }
       } catch {
-        // Backend not ready yet
+        // Network error
+      }
+      // Backend not ready yet — retry
+      if (!cancelled) {
         attempts++;
         if (attempts > 5) {
           setLoadingMessage('Starting MLX engine...');
         }
-        if (!cancelled) {
-          setTimeout(checkBackend, 500);
-        }
+        setTimeout(checkBackend, 500);
       }
     };
 

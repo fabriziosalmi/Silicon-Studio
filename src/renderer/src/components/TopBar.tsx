@@ -61,17 +61,17 @@ export function TopBar() {
                             <div className="flex items-baseline gap-1">
                                 <span className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter">RAM</span>
                                 <span className="text-xs text-gray-300 font-mono font-medium">
-                                    {(systemStats.ramUsageGB).toFixed(1)}<span className="text-[10px] opacity-50">GB</span>
+                                    {(systemStats.memory.used / (1024 * 1024 * 1024)).toFixed(1)}<span className="text-[10px] opacity-50">GB</span>
                                 </span>
                             </div>
                         </div>
 
-                        <div className="flex items-center gap-2 group transition-all" title="MLX VRAM Usage">
+                        <div className="flex items-center gap-2 group transition-all" title="CPU Load">
                             <Activity size={14} className={activeModel ? "text-purple-400 drop-shadow-[0_0_5px_rgba(168,85,247,0.4)]" : "text-gray-500 group-hover:text-purple-400 transition-colors"} />
                             <div className="flex items-baseline gap-1">
-                                <span className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter">VRAM</span>
+                                <span className="text-[9px] text-gray-500 font-bold uppercase tracking-tighter">CPU</span>
                                 <span className="text-xs text-gray-300 font-mono font-medium">
-                                    {(systemStats.vramUsageGB).toFixed(1)}<span className="text-[10px] opacity-50">GB</span>
+                                    {systemStats.cpu.percent.toFixed(0)}<span className="text-[10px] opacity-50">%</span>
                                 </span>
                             </div>
                         </div>
