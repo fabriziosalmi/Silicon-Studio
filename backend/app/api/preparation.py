@@ -16,8 +16,6 @@ class ConvertRequest(BaseModel):
     instruction_col: str
     input_col: Optional[str] = None
     output_col: str
-    strip_pii: bool = False
-    model_family: str = "Llama"
 
 class McpGenerateRequest(BaseModel):
     model_id: str
@@ -49,9 +47,7 @@ async def convert_csv(request: ConvertRequest):
             request.output_path,
             request.instruction_col,
             request.input_col,
-            request.output_col,
-            request.strip_pii,
-            request.model_family
+            request.output_col
         )
         return result
     except ValueError as e:

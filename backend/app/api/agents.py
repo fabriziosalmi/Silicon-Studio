@@ -26,8 +26,10 @@ async def execute_agent(agent_id: str, payload: Dict[str, Any]):
     try:
         input_text = payload.get("input", "")
         return await service.execute_agent(agent_id, input_text)
-    except Exception as e:
+    except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
 @router.delete("/{agent_id}")
 async def delete_agent(agent_id: str):

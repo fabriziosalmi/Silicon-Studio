@@ -18,8 +18,6 @@ export function DataPreparation() {
     const [instructionCol, setInstructionCol] = useState("")
     const [inputCol, setInputCol] = useState("")
     const [outputCol, setOutputCol] = useState("")
-    const [stripPii, setStripPii] = useState(false)
-    const [modelFamily, setModelFamily] = useState("Llama")
     const [outputPath, setOutputPath] = useState("")
 
     // MCP Mode State
@@ -182,33 +180,6 @@ export function DataPreparation() {
                                 <span className="truncate">{outputPath ? "..." + outputPath.slice(-25) : "Select Folder..."}</span>
                                 <Save className="w-4 h-4 opacity-50" />
                             </button>
-                        </div>
-                        <div className="flex flex-col space-y-1.5">
-                            <label className="text-xs font-bold text-gray-500 uppercase">Format</label>
-                            <select
-                                value={modelFamily}
-                                onChange={(e) => setModelFamily(e.target.value)}
-                                className="w-full h-10 bg-black/40 border border-white/10 rounded-lg px-3 text-white text-[13px] font-medium outline-none focus:border-blue-500 hover:bg-white/10 hover:border-white/20 transition-all shadow-sm"
-                            >
-                                <option value="Llama">Llama (3, 3.1, 4)</option>
-                                <option value="Mistral">Mistral / Mixtral</option>
-                                <option value="Qwen">Qwen (2.5)</option>
-                                <option value="Gemma">Gemma (2, 3)</option>
-                                <option value="Phi">Phi (3, 3.5, 4)</option>
-                            </select>
-                        </div>
-                        <div className="flex flex-col space-y-1.5 justify-center">
-                            <label className="text-xs font-bold text-gray-500 uppercase mb-1">Options</label>
-                            <div
-                                className={`flex items-center space-x-2 px-3 h-10 rounded-lg border cursor-pointer transition-all shadow-sm ${stripPii ? 'bg-indigo-500/20 border-indigo-500/50 text-indigo-200' : 'bg-black/40 border-white/10 text-gray-400 hover:bg-white/10 hover:border-white/20'
-                                    }`}
-                                onClick={() => setStripPii(!stripPii)}
-                            >
-                                <div className={`w-4 h-4 rounded border flex items-center justify-center ${stripPii ? 'bg-indigo-500 border-indigo-500' : 'border-gray-500'}`}>
-                                    {stripPii && <span className="text-[10px] text-white">✓</span>}
-                                </div>
-                                <span className="text-xs font-medium">Auto-Remove PII</span>
-                            </div>
                         </div>
                     </div>
                 ) : (

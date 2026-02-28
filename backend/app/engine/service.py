@@ -16,15 +16,17 @@ DEFAULT_MODELS = []
 
 class MLXEngineService:
     def __init__(self):
-        # Resolve Workspace Directory (Absolute)
-        self.workspace_dir = Path(__file__).parent.parent.parent.parent.absolute()
         self.active_jobs = {}
         self.active_downloads = set()
         self.active_model_id = None
         self.active_model = None
         self.active_tokenizer = None
+        self.loaded_models = {}
         self.stop_event = threading.Event()
         self.generation_lock = asyncio.Lock()
+
+        # Use writable per-user directory for models/adapters
+        self.workspace_dir = Path.home() / ".silicon-studio"
         self.models_dir = self.workspace_dir / "models"
         self.adapters_dir = self.workspace_dir / "adapters"
         

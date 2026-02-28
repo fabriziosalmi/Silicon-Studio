@@ -38,7 +38,7 @@ class DataPreparationService:
             raise ValueError(f"File not found: {file_path}")
             
         try:
-            df = pd.read_csv(file_path)
+            df = pd.read_csv(file_path, keep_default_na=False, na_values=[])
             jsonl_data = []
             skipped_rows = 0
             errors = []
@@ -50,9 +50,8 @@ class DataPreparationService:
                 if input_col:
                     context = str(row.get(input_col, "")).strip()
 
-                # --- RUTHLESS VALIDATION ---
-                # 1. Skip if instruction or response is truly empty
-                if not instruction or not response or instruction == "nan" or response == "nan":
+                # Skip if instruction or response is truly empty
+                if not instruction or not response:
                     skipped_rows += 1
                     errors.append(f"Row {i}: Missing instruction or response.")
                     continue
@@ -63,7 +62,7 @@ class DataPreparationService:
                     errors.append(f"Row {i}: Response too short ({len(response)} chars).")
                     continue
                 
-                # SOTA Format mapping
+                # Build JSONL record
                 jsonl_data.append({
                     "instruction": instruction,
                     "input": context,

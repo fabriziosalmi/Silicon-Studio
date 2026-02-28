@@ -1,8 +1,14 @@
 import { useGlobalState } from '../context/GlobalState';
+import { apiClient } from '../api/client';
 import { Cpu, Activity, DatabaseZap, LogOut } from 'lucide-react';
 
 export function TopBar() {
     const { backendReady, systemStats, activeModel, setActiveModel, isTraining } = useGlobalState();
+
+    const handleEject = async () => {
+        try { await apiClient.engine.unloadModel(); } catch { /* best-effort */ }
+        setActiveModel(null);
+    };
 
     return (
         <div className="h-10 w-full drag-region bg-[#18181B]/90 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-4 z-50">
@@ -36,9 +42,9 @@ export function TopBar() {
                         <span className="text-[11px] font-bold tracking-wide uppercase text-blue-300">{activeModel.name}</span>
                         <div className="w-px h-3.5 bg-blue-500/20 mx-1"></div>
                         <button
-                            onClick={() => setActiveModel(null)}
+                            onClick={handleEject}
                             className="flex items-center gap-1.5 px-1.5 py-0.5 rounded text-gray-400 hover:text-red-400 hover:bg-red-500/10 transition-colors"
-                            title="Eject model from VRAM"
+                            title="Unload model from memory"
                         >
                             <LogOut size={11} />
                             <span className="text-[10px] font-bold uppercase tracking-wider">Eject</span>

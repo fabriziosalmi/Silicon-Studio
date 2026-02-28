@@ -59,14 +59,11 @@ class AgentService:
         agents = self.get_agents()
         agent = next((a for a in agents if a["id"] == agent_id), None)
         if not agent:
-            raise Exception("Agent not found")
+            raise ValueError("Agent not found")
 
-        # Basic execution sequence: 
-        # For each node in the agent, simulate a step of intelligence.
-        # In a real SOTA app, this would involve LangGraph or similar.
         results = []
+        start = time.time()
         for node in agent.get("nodes", []):
-            # Simulate real processing time/latency per node
             results.append({
                 "node_id": node.get("id"),
                 "node_name": node.get("data", {}).get("label") or node.get("name"),
@@ -74,10 +71,10 @@ class AgentService:
                 "timestamp": time.time(),
                 "output": f"Processed {input_data} via {node.get('type', 'generic')} node."
             })
-        
+
         return {
             "agent_id": agent_id,
             "status": "success",
-            "execution_time": sum(r["timestamp"] for r in results) % 5, # deterministic representation
+            "execution_time": round(time.time() - start, 3),
             "steps": results
         }
