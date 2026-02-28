@@ -58,18 +58,53 @@ class RagService:
         all_chunks = []
         for file_path in files:
             path = Path(file_path)
-            if not path.exists(): continue
-            
-            try:
-                with open(path, "r", encoding="utf-8", errors="ignore") as f:
-                    text = f.read()
-                
-                # Recursive Splitting Logic
-                chunks = self._recursive_split(text, chunk_size, overlap)
-                all_chunks.extend(chunks)
-            except Exception as e:
-                print(f"Error processing {file_path}: {e}")
+            if not path.exists():
+                continue
 
+            # Build a list of actual files to process. If a directory is provided,
+            # expand it recursively; otherwise, just process the single file.
+            paths_to_process: List[Path] = []
+            if path.is_dir():
+                for root, _, filenames in os.walk(path):
+                    for name in filenames:
+                        file_candidate = Path(root) / name
+                        # Only add regular files that exist
+                        if file_candidate.is_file():
+                            paths_to_process.append(file_candidate)
+            else:
+                if path.is_file():
+                    paths_to_process.append(path)
+
+            for file_to_process in paths_to_process:
+                try:
+                    with open(file_to_process, "r", encoding="utf-8", errors="ignore") as f:
+                        text = f.read()
+
+                    # Recursive Splitting Logic (base split without overlap)
+                    base_chunks = self._recursive_split(text, chunk_size, 0)
+
+                    # Apply true overlapping windows between consecutive chunks.
+                    if overlap > 0:
+                        chunks: List[str] = []
+                        for i, chunk in enumerate(base_chunks):
+                            if i == 0:
+                                # First chunk unchanged
+                                chunks.append(chunk[:chunk_size])
+                                continue
+                            prev_chunk = chunks[-1]
+                            # Take the last `overlap` characters from the previous chunk
+                            if overlap >= len(prev_chunk):
+                                prefix = prev_chunk
+                            else:
+                                prefix = prev_chunk[-overlap:]
+                            new_chunk = (prefix + chunk)[:chunk_size]
+                            chunks.append(new_chunk)
+                    else:
+                        chunks = base_chunks
+
+                    all_chunks.extend(chunks)
+                except Exception as e:
+                    print(f"Error processing {file_to_process}: {e}")
         # In a real app, we would embed these chunks and store in FAISS/Chroma
         # For now, we update the metadata to reflect real chunk counts
         col["chunks"] += len(all_chunks)
