@@ -145,7 +145,6 @@ export function DataPreparation() {
                     className={`pb-3 text-sm font-medium transition-colors relative flex items-center gap-2 ${dataMode === 'mcp' ? 'text-purple-400' : 'text-gray-400 hover:text-white'}`}
                 >
                     <Server className="w-4 h-4" /> Generate via MCP
-                    <span className="text-[9px] bg-purple-500/20 text-purple-300 px-1.5 py-0.5 rounded border border-purple-500/20 uppercase tracking-widest">SOTA</span>
                     {dataMode === 'mcp' && <div className="absolute bottom-0 left-0 w-full h-0.5 bg-purple-400"></div>}
                 </button>
             </div>

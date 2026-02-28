@@ -135,8 +135,8 @@ export function EngineInterface() {
         <div className="h-full flex flex-col space-y-4 text-white overflow-hidden pb-4">
             <PageHeader
                 title="Fine-Tuning Engine"
-                description="Train SOTA LoRA adapters directly on your local Apple Silicon. Private, accelerated, and parameter-perfect."
-                badge="MLX SOTA"
+                description="Train LoRA adapters directly on your local Apple Silicon. Private, accelerated, and efficient."
+                badge="MLX"
             />
 
             {models.length === 0 ? (
