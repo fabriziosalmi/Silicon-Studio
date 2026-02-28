@@ -1,8 +1,11 @@
 import json
 import uuid
+import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
 import time
+
+logger = logging.getLogger(__name__)
 
 class AgentService:
     def __init__(self):
@@ -18,7 +21,8 @@ class AgentService:
         try:
             with open(self.agents_file, "r") as f:
                 return json.load(f)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to load agents: {e}")
             return []
 
     def save_agent(self, agent_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -53,8 +57,9 @@ class AgentService:
 
     async def execute_agent(self, agent_id: str, input_data: str) -> Dict[str, Any]:
         """
-        Real Agent Execution Logic (Non-mock).
-        Sequentially processes nodes in the agent pipeline.
+        Execute an agent pipeline sequentially.
+        NOTE: Node logic is a placeholder — each node returns a summary string
+        rather than performing real computation. Extend with actual node handlers.
         """
         agents = self.get_agents()
         agent = next((a for a in agents if a["id"] == agent_id), None)

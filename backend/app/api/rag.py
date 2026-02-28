@@ -1,19 +1,19 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
-from typing import List, Optional
+from pydantic import BaseModel, Field
+from typing import List
 from app.rag.service import RagService
 
 router = APIRouter()
 service = RagService()
 
 class CollectionCreate(BaseModel):
-    name: str
+    name: str = Field(min_length=1, max_length=255)
 
 class IngestRequest(BaseModel):
     collection_id: str
-    files: List[str]
-    chunk_size: int = 512
-    overlap: int = 50
+    files: List[str] = Field(min_length=1)
+    chunk_size: int = Field(default=512, ge=64, le=8192)
+    overlap: int = Field(default=50, ge=0, le=4096)
 
 @router.get("/collections")
 async def get_collections():

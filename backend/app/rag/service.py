@@ -1,9 +1,11 @@
 import os
 import json
 import uuid
+import logging
 from pathlib import Path
 from typing import List, Dict, Any, Optional
-import time
+
+logger = logging.getLogger(__name__)
 
 class RagService:
     def __init__(self):
@@ -20,7 +22,8 @@ class RagService:
         try:
             with open(self.collections_file, "r") as f:
                 return json.load(f)
-        except Exception:
+        except Exception as e:
+            logger.error(f"Failed to load collections: {e}")
             return []
 
     def create_collection(self, name: str) -> Dict[str, Any]:
@@ -93,12 +96,14 @@ class RagService:
 
                     all_chunks.extend(chunks)
                 except Exception as e:
-                    print(f"Error processing {file_to_process}: {e}")
+                    logger.warning(f"Error processing {file_to_process}: {e}")
 
-        # In a real app, we would embed these chunks and store in FAISS/Chroma
-        # For now, we update the metadata to reflect real chunk counts
+        # TODO: Embed chunks with a local model and store in a vector DB (FAISS/Chroma).
+        # Currently only text splitting is implemented; chunks are counted but not persisted.
         col["chunks"] += len(all_chunks)
-        col["size"] = f"{round(col['chunks'] * 0.5)} KB" # Estimated
+        estimated_kb = sum(len(c.encode('utf-8')) for c in all_chunks) // 1024
+        col["size"] = f"{col.get('_total_kb', 0) + estimated_kb} KB"
+        col["_total_kb"] = col.get("_total_kb", 0) + estimated_kb
         col["lastUpdated"] = "Just now"
 
         self._save_collections(collections)
@@ -114,7 +119,8 @@ class RagService:
             if len(txt) <= chunk_size:
                 return [txt]
 
-            if not seps:
+            if not seps or seps[0] == "":
+                # Character-level split as last resort
                 return [txt[i:i+chunk_size] for i in range(0, len(txt), chunk_size)]
 
             sep = seps[0]

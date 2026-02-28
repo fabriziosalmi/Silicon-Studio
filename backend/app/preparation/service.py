@@ -1,9 +1,11 @@
 import pandas as pd
 import json
 import os
-import time
+import logging
 from typing import List, Dict, Any, Optional
 from pathlib import Path
+
+logger = logging.getLogger(__name__)
 
 class DataPreparationService:
     def __init__(self):
@@ -31,8 +33,8 @@ class DataPreparationService:
                              input_col: Optional[str],
                              output_col: str) -> Dict[str, Any]:
         """
-        Convert CSV to JSONL format with ruthless structural validation.
-        Rationale: Garbage In, Garbage Out. SOTA fine-tuning requires clean data.
+        Convert CSV to JSONL format with structural validation.
+        Skips rows with empty or too-short responses.
         """
         if not os.path.exists(file_path):
             raise ValueError(f"File not found: {file_path}")
@@ -88,29 +90,3 @@ class DataPreparationService:
         except Exception as e:
             raise ValueError(f"Conversion failed: {str(e)}")
 
-    def generate_via_mcp(self, model_id: str, server_id: str, prompt: str, output_path: str) -> Dict[str, Any]:
-        """
-        Mock MCP generation: In a real app, this would call the MCP server,
-        get context, and use the bridge model to generate JSONL rows.
-        """
-        # Simulate work
-        time.sleep(2)
-        
-        # Real-world logic would happen here...
-        
-        mock_data = [
-            {"instruction": f"Explain {server_id} concept A", "output": f"Detailed explanation based on {prompt}"},
-            {"instruction": f"Mapping between {server_id} and X", "output": "Logic description..."},
-            {"instruction": f"Security best practices for {server_id}", "output": "Use local vault..."},
-        ]
-        
-        # Save to file
-        with open(output_path, "w") as f:
-            for row in mock_data:
-                f.write(json.dumps(row) + "\n")
-                
-        return {
-            "status": "success",
-            "rows": len(mock_data),
-            "data": mock_data
-        }

@@ -15,20 +15,14 @@ export function Deployment() {
     const [errorMsg, setErrorMsg] = useState('')
     const [loading, setLoading] = useState(false)
     const [copied, setCopied] = useState(false)
-    const [throughput, setThroughput] = useState(0) // tokens/s
-    const [requests, setRequests] = useState(0) // total reqs
+    const [uptime, setUptime] = useState<number | null>(null)
 
     useEffect(() => {
         const checkStatus = async () => {
             try {
-                const status = await apiClient.deployment.getStatus() as any;
+                const status = await apiClient.deployment.getStatus();
                 setServerRunning(status.running);
-                if (status.running) {
-                    setThroughput(status.throughput || 0);
-                    setRequests(status.requests || 0);
-                } else {
-                    setThroughput(0);
-                }
+                setUptime(status.uptime_seconds ?? null);
             } catch (e) {
                 console.error("Failed to check server status", e);
             }
@@ -137,14 +131,10 @@ export function Deployment() {
                             </div>
 
                             <div className="space-y-4 pt-4 border-t border-white/5">
-                                <div className="grid grid-cols-2 gap-4">
-                                    <div className="bg-black/40 border border-white/5 rounded-xl p-4 text-center">
-                                        <div className="text-[10px] text-gray-500 font-bold uppercase mb-1">Throughput</div>
-                                        <div className="text-xl font-mono text-blue-400">{throughput.toFixed(1)} <span className="text-[10px] text-gray-600">t/s</span></div>
-                                    </div>
-                                    <div className="bg-black/40 border border-white/5 rounded-xl p-4 text-center">
-                                        <div className="text-[10px] text-gray-500 font-bold uppercase mb-1">Total Reqs</div>
-                                        <div className="text-xl font-mono text-purple-400">{requests}</div>
+                                <div className="bg-black/40 border border-white/5 rounded-xl p-4 text-center">
+                                    <div className="text-[10px] text-gray-500 font-bold uppercase mb-1">Uptime</div>
+                                    <div className="text-xl font-mono text-blue-400">
+                                        {uptime != null ? `${Math.floor(uptime / 60)}m ${uptime % 60}s` : '--'}
                                     </div>
                                 </div>
 

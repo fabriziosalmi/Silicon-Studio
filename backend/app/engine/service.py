@@ -7,12 +7,11 @@ import asyncio
 import threading
 import os
 import json
+import logging
 from pathlib import Path
 from typing import Dict, Any, List
 
-# Define a curated list of supported models for the UI
-# Default curated list (MLX Community only, as requested)
-DEFAULT_MODELS = []
+logger = logging.getLogger(__name__)
 
 class MLXEngineService:
     def __init__(self):
@@ -44,42 +43,39 @@ class MLXEngineService:
         user_data_dir = Path.home() / ".silicon-studio"
         user_data_dir.mkdir(parents=True, exist_ok=True)
         self.models_config_path = user_data_dir / "models.json"
-        print(f"Models config at: {self.models_config_path}")
+        logger.info(f"Models config at: {self.models_config_path}")
                 
         self.models_config = self._load_models_config()
         self._run_auto_discovery()
 
     def _run_auto_discovery(self):
-        """Phase 9: Seamless local LLM integration."""
-        print("Running SOTA Model Auto-Discovery...")
+        """Scan known local model directories (LM Studio, Ollama, HuggingFace cache)."""
+        logger.info("Running local model auto-discovery...")
         discovered_count = 0
         for path in self.discovery_paths:
             if path.exists():
-                print(f"Scanning discovery path: {path}")
+                logger.info(f"Scanning discovery path: {path}")
                 try:
-                    # Registry logic handles deduplication internally
                     models = self.register_model(name=f"Local / {path.name.replace('-',' ').title()}", path=str(path))
                     discovered_count += len(models)
                 except Exception as e:
-                    print(f"Discovery skip for {path}: {e}")
-        print(f"Auto-Discovery complete. Found {discovered_count} new local models.")
+                    logger.debug(f"Discovery skip for {path}: {e}")
+        logger.info(f"Auto-discovery complete. Found {discovered_count} new local models.")
 
     def _load_models_config(self):
         # Load directly from models.json as the source of truth
         if self.models_config_path.exists():
             try:
                 with open(self.models_config_path, "r") as f:
-                    import json
                     return json.load(f)
             except Exception as e:
-                print(f"Error loading models.json: {e}")
+                logger.error(f"Error loading models.json: {e}")
                 return []
         else:
             return []
 
     def _save_models_config(self):
         with open(self.models_config_path, "w") as f:
-            import json
             json.dump(self.models_config, f, indent=4)
             
     def get_supported_models(self):
@@ -100,12 +96,12 @@ class MLXEngineService:
                 return f"{gb:.2f}GB"
             return f"{gb:.1f}GB"
         except Exception as e:
-            print(f"Error calculating size for {path}: {e}")
+            logger.warning(f"Error calculating size for {path}: {e}")
             return "Unknown"
 
     def _get_model_metadata(self, model_path: Path) -> Dict[str, Any]:
         """
-        Extracts industry-standard metadata from the file headers.
+        Extracts metadata from model files.
         Supports: config.json (Transformers), .gguf (Llama.cpp), .safetensors (HF)
         """
         meta = {
@@ -118,7 +114,6 @@ class MLXEngineService:
         config_path = model_path / "config.json"
         if config_path.exists():
             try:
-                import json
                 with open(config_path, "r") as f:
                     config = json.load(f)
                     if "model_type" in config:
@@ -131,7 +126,8 @@ class MLXEngineService:
                     if "quantization" in config:
                         q = config["quantization"]
                         meta["quantization"] = f"{q['bits']}-bit" if isinstance(q, dict) and "bits" in q else str(q)
-            except: pass
+            except Exception as e:
+                logger.debug(f"Failed to parse config.json for {model_path}: {e}")
 
         # 2. GGUF Parsing (Quick Scanner)
         gguf_files = list(model_path.glob("*.gguf"))
@@ -144,9 +140,10 @@ class MLXEngineService:
                         meta["architecture"] = "GGUF"
                         if "q4_k_m" in chunk.lower(): meta["quantization"] = "Q4_K_M"
                         elif "q8_0" in chunk.lower(): meta["quantization"] = "Q8_0"
-            except: pass
+            except Exception as e:
+                logger.debug(f"Failed to parse GGUF header for {gguf_files[0]}: {e}")
 
-        # 3. Refine by folder/file names (Industry Fallback)
+        # 3. Refine by folder/file names
         name_lower = model_path.name.lower()
         if meta["quantization"] == "Standard":
             if "4bit" in name_lower or "q4" in name_lower: meta["quantization"] = "4-bit"
@@ -196,8 +193,8 @@ class MLXEngineService:
                         if child.name.lower() in ["node_modules", "venv", ".git", "__pycache__", "site-packages"]:
                             continue
                         _scan(child, depth + 1)
-            except Exception:
-                pass
+            except PermissionError:
+                logger.debug(f"Permission denied scanning: {dir_path}")
 
         _scan(target_path, 0)
         return found_models
@@ -256,23 +253,6 @@ class MLXEngineService:
         # Kept for compatibility if used elsewhere, but internally we use models_config
         return self.models_config
 
-    async def get_model_and_tokenizer(self, model_id: str):
-        if model_id not in self.loaded_models:
-            print(f"Loading model: {model_id}")
-            
-            path_to_load = model_id
-            
-            # 1. Is it an absolute path? (Custom Model)
-            if Path(model_id).is_absolute() and Path(model_id).exists():
-                 path_to_load = model_id
-            else:
-                # 2. Local standard cache
-                sanitized_name = model_id.replace("/", "--")
-                local_path = self.models_dir / sanitized_name
-                # Only load if it's fully downloaded (marked completed)
-                if (local_path / ".completed").exists():
-                    path_to_load = str(local_path)
-            
     async def load_active_model(self, model_id: str):
         """
         Loads a model and tokenizer into active memory, replacing any previously loaded model.
@@ -284,20 +264,20 @@ class MLXEngineService:
     async def _load_model_impl(self, model_id: str):
         """Internal model loading without lock (caller must hold the lock)."""
         if self.active_model_id == model_id and self.active_model and self.active_tokenizer:
-            print(f"Model {model_id} is already active.")
+            logger.info(f"Model {model_id} is already active.")
             return
 
         # 0. VRAM Cleanup
         if self.active_model:
-            print(f"Unloading previous model {self.active_model_id}...")
+            logger.info(f"Unloading previous model {self.active_model_id}...")
             self.active_model = None
             self.active_tokenizer = None
             self.active_model_id = None
             gc.collect()
             mx.metal.clear_cache()
-            print("VRAM cache cleared.")
+            logger.info("VRAM cache cleared.")
 
-        print(f"Loading model: {model_id}")
+        logger.info(f"Loading model: {model_id}")
         
         # 1. Resolve Path
         path_to_load = model_id
@@ -314,11 +294,11 @@ class MLXEngineService:
         if not p.is_absolute():
             # If not absolute and not found in models_dir, it might be a HuggingFace ID
             # mlx_lm.load handles HF IDs, but we prefer local absolute paths if they exist
-            print(f"Warning: Loading via ID or relative path: {path_to_load}")
+            logger.warning(f"Loading via ID or relative path: {path_to_load}")
         else:
             path_to_load = str(p.absolute())
 
-        print(f"Loading from: {path_to_load}")
+        logger.info(f"Loading from: {path_to_load}")
 
         loop = asyncio.get_running_loop()
         try:
@@ -327,33 +307,32 @@ class MLXEngineService:
             self.active_model_id = model_id
             self.active_model = model
             self.active_tokenizer = tokenizer
-            print(f"Model {model_id} loaded and set as active.")
+            logger.info(f"Model {model_id} loaded and set as active.")
         except Exception as e:
-            print(f"Failed to load model {model_id}: {e}")
+            logger.error(f"Failed to load model {model_id}: {e}")
             raise e
 
     def unload_model(self):
         """Explicitly unload the active model and free VRAM."""
         if self.active_model:
-            print(f"Unloading model {self.active_model_id}...")
+            logger.info(f"Unloading model {self.active_model_id}...")
             self.active_model = None
             self.active_tokenizer = None
             self.active_model_id = None
             gc.collect()
             mx.metal.clear_cache()
-            print("Model unloaded and VRAM cache cleared.")
+            logger.info("Model unloaded and VRAM cache cleared.")
         else:
-            print("No model currently loaded.")
+            logger.info("No model currently loaded.")
 
     def stop_generation(self):
         """Sets the stop event to interrupt MLX generation."""
         self.stop_event.set()
-        print("Stop signal sent to generation loop.")
+        logger.info("Stop signal sent to generation loop.")
 
     async def generate_stream(self, model_id: str, messages: list, **kwargs):
         """
-        Inference loop with streaming (SSE).
-        Rationale: Token-by-token generation for FAANG/SOTA experience.
+        Token-by-token streaming inference via SSE.
         """
         async with self.generation_lock:
             try:
@@ -425,7 +404,7 @@ class MLXEngineService:
                 yield {"text": "", "done": True}
 
             except Exception as e:
-                print(f"Streaming error: {e}")
+                logger.error(f"Streaming error: {e}")
                 yield {"error": str(e)}
 
     async def generate_response(self, model_id: str, messages: list, **kwargs) -> Dict[str, Any]:
@@ -440,7 +419,7 @@ class MLXEngineService:
 
     async def start_finetuning(self, job_id: str, config: Dict[str, Any]):
         job_name = config.get("job_name", "")
-        print(f"DEBUG SERVICE: start_finetuning job_name='{job_name}' for job_id={job_id}")
+        logger.debug(f"SERVICE: start_finetuning job_name='{job_name}' for job_id={job_id}")
         self.active_jobs[job_id] = {
             "status": "starting", 
             "progress": 0, 
@@ -479,8 +458,8 @@ class MLXEngineService:
             
             adapter_file = job_adapter_dir / "adapters.safetensors"
 
-            print(f"Starting training job {job_id} for model {model_id}...")
-            print(f"Params: Epochs={epochs}, BS={batch_size}, Rank={lora_rank}, Alpha={lora_alpha}, LR={lr}, Dropout={lora_dropout}")
+            logger.info(f"Starting training job {job_id} for model {model_id}...")
+            logger.info(f"Params: Epochs={epochs}, BS={batch_size}, Rank={lora_rank}, Alpha={lora_alpha}, LR={lr}, Dropout={lora_dropout}")
 
             # 1. Load Model (fresh load for training recommended to avoid state issues)
             # For efficiency we could reuse, but freezing/lora modification happens in-place.
@@ -504,9 +483,9 @@ class MLXEngineService:
             target_train_path = job_data_dir / "train.jsonl"
             try:
                 shutil.copy(dataset_path, target_train_path)
-                print(f"Staged dataset {dataset_path} to {target_train_path}")
+                logger.info(f"Staged dataset {dataset_path} to {target_train_path}")
             except Exception as e:
-                print(f"Error copying dataset: {e}")
+                logger.error(f"Error copying dataset: {e}")
                 # Fallback? No, likely fatal.
             
             # Note: load_local_dataset returns (train, val, test) tuple
@@ -515,7 +494,7 @@ class MLXEngineService:
             # --- FIX FOR EMPTY VALIDATION SET ---
             # If user provides only train.jsonl, val_set is empty list. Train loop crashes.
             if len(val_set) == 0:
-                print("Validation set empty. Splitting train set...")
+                logger.info("Validation set empty. Splitting train set...")
                 # Access raw data: load_local_dataset returns [ChatDataset(...), ...]
                 # ChatDataset wraps a list in self._data
                 if hasattr(train_set, "_data"):
@@ -537,7 +516,7 @@ class MLXEngineService:
                     val_set = create_dataset(val_raw, tokenizer, model_config)
                 else:
                     # Too small to split, duplicate
-                    print("Train set too small (<=1). Duplicating for validation.")
+                    logger.info("Train set too small (<=1). Duplicating for validation.")
                     # Note: Using same object might cause issues if modified? Safe to reuse for MVP
                     train_set = train_set
                     val_set = train_set 
@@ -553,7 +532,7 @@ class MLXEngineService:
             if steps_per_epoch < 1: steps_per_epoch = 1
             total_iters = steps_per_epoch * epochs
             
-            print(f"Training Plan: {len(train_set)} samples, {steps_per_epoch} steps/epoch, {total_iters} total iters.")
+            logger.info(f"Training Plan: {len(train_set)} samples, {steps_per_epoch} steps/epoch, {total_iters} total iters.")
 
             args = TrainingArgs(
                 batch_size=batch_size, 
@@ -603,8 +582,7 @@ class MLXEngineService:
             # linear_to_lora_layers modifies model in-place and returns None!
             linear_to_lora_layers(model, lora_config["num_layers"], lora_config)
             
-            # Print model to confirm
-            print("Model converted to LoRA.")
+            logger.info("Model converted to LoRA.")
 
             train(
                 model=model,
@@ -659,7 +637,6 @@ class MLXEngineService:
             }
 
             try:
-                import json
                 # Save metadata
                 with open(metadata_path, 'w') as f:
                     json.dump(metadata, f, indent=4)
@@ -669,7 +646,7 @@ class MLXEngineService:
                     json.dump(final_adapter_config, f, indent=4)
                     
             except Exception as e:
-                print(f"Failed to save metadata or adapter config: {e}")
+                logger.error(f"Failed to save metadata or adapter config: {e}")
 
             ft_model_entry = {
                 "id": f"ft-{job_id}", # Unique ID for the fine-tuned model
@@ -693,12 +670,10 @@ class MLXEngineService:
             }
             self.models_config.append(ft_model_entry)
             self._save_models_config()
-            print(f"Registered fine-tuned model: {ft_model_entry['name']}")
+            logger.info(f"Registered fine-tuned model: {ft_model_entry['name']}")
             
         except Exception as e:
-            import traceback
-            traceback.print_exc()
-            print(f"Training failed: {e}")
+            logger.error(f"Training failed: {e}", exc_info=True)
             self.active_jobs[job_id]["status"] = "failed"
             self.active_jobs[job_id]["error"] = str(e)
 
@@ -713,7 +688,7 @@ class MLXEngineService:
 
     async def get_model_and_tokenizer(self, model_id: str):
         if model_id not in self.loaded_models:
-            print(f"Loading model: {model_id}")
+            logger.info(f"Loading model: {model_id}")
             
             path_to_load = model_id
             adapter_path = None
@@ -726,7 +701,7 @@ class MLXEngineService:
                     # loading fine-tuned model: base + adapter
                     path_to_load = config_entry["base_model"]
                     adapter_path = config_entry["adapter_path"]
-                    print(f"Identified fine-tuned model. Base: {path_to_load}, Adapter: {adapter_path}")
+                    logger.info(f"Identified fine-tuned model. Base: {path_to_load}, Adapter: {adapter_path}")
                 elif Path(config_entry["id"]).is_absolute():
                      path_to_load = config_entry["id"]
                 else:
@@ -745,7 +720,7 @@ class MLXEngineService:
                     if (local_path / ".completed").exists():
                         path_to_load = str(local_path)
             
-            print(f"Loading from: {path_to_load} (Adapter: {adapter_path})")
+            logger.info(f"Loading from: {path_to_load} (Adapter: {adapter_path})")
 
             # This loads the model weights into memory.
             loop = asyncio.get_running_loop()
@@ -785,7 +760,7 @@ class MLXEngineService:
                     
                     # Backfill size if missing or 'Custom'
                     if m.get("size") == "Custom":
-                        print(f"Backfilling size for {m['name']}")
+                        logger.info(f"Backfilling size for {m['name']}")
                         new_size = self._get_dir_size_str(Path(m["id"]))
                         m["size"] = new_size # Update in memory
                         # We should save this back to JSON so we don't recalc every second
@@ -812,19 +787,16 @@ class MLXEngineService:
             # If name looks like generic ID and it's a fine-tune, try to read metadata.json
             if entry["name"].startswith("Fine-Tune ") and "adapter_path" in m:
                 try:
-                    # adapter_path points to .safetensors file. Parent is the dir.
                     adapter_file = Path(m["adapter_path"])
                     meta_path = adapter_file.parent / "metadata.json"
                     if meta_path.exists():
-                        import json
                         with open(meta_path, 'r') as f:
                             meta = json.load(f)
                             if "job_name" in meta and meta["job_name"]:
                                 entry["name"] = meta["job_name"]
-                                # Optional: update config in memory to persist next save
-                                m["name"] = meta["job_name"] 
-                except Exception:
-                    pass
+                                m["name"] = meta["job_name"]
+                except Exception as e:
+                    logger.debug(f"Could not read metadata for {m.get('name')}: {e}")
 
             models.append(entry)
         return models
@@ -835,14 +807,14 @@ class MLXEngineService:
         This is a blocking operation (run in Bg Task), handles markers.
         """
         if model_id in self.active_downloads:
-            print(f"Model {model_id} already downloading.")
+            logger.info(f"Model {model_id} already downloading.")
             return
 
         self.active_downloads.add(model_id)
         try:
             from huggingface_hub import snapshot_download
             
-            print(f"Downloading {model_id} to {self.models_dir}...")
+            logger.info(f"Downloading {model_id} to {self.models_dir}...")
             sanitized_name = model_id.replace("/", "--")
             local_dir = self.models_dir / sanitized_name
             
@@ -862,10 +834,10 @@ class MLXEngineService:
             with open(marker_file, 'w') as f:
                 f.write("ok")
                 
-            print(f"Successfully downloaded {model_id}")
+            logger.info(f"Successfully downloaded {model_id}")
             return True
         except Exception as e:
-            print(f"Failed to download {model_id}: {e}")
+            logger.error(f"Failed to download {model_id}: {e}")
             raise e
         finally:
             self.active_downloads.discard(model_id)
@@ -880,7 +852,7 @@ class MLXEngineService:
             config_entry = self._get_model_config_by_id(model_id)
             
             if config_entry and config_entry.get("is_custom"):
-                print(f"Deleting custom model: {model_id} ({config_entry['name']})")
+                logger.info(f"Deleting custom model: {model_id} ({config_entry['name']})")
                 
                 # 1. Remove from config
                 self.models_config = [m for m in self.models_config if m["id"] != model_id]
@@ -891,7 +863,7 @@ class MLXEngineService:
                     adapter_path = Path(config_entry["adapter_path"])
                     if adapter_path.exists() and adapter_path.is_dir():
                         import shutil
-                        print(f"Removing adapter directory: {adapter_path}")
+                        logger.info(f"Removing adapter directory: {adapter_path}")
                         shutil.rmtree(adapter_path)
                 
                 # 3. Delete files if it's a User Added Foundation Model (Absolute Path)
@@ -900,10 +872,10 @@ class MLXEngineService:
                      # SAFETY CHECK: Only delete if path contains 'models' to prevent system damage
                      if "models" in str(target_path).lower() and target_path.is_dir():
                          import shutil
-                         print(f"Removing user model directory: {target_path}")
+                         logger.info(f"Removing user model directory: {target_path}")
                          shutil.rmtree(target_path)
                      else:
-                         print(f"Skipping disk deletion for safety (not in 'models' folder?): {target_path}")
+                         logger.info(f"Skipping disk deletion for safety (not in 'models' folder?): {target_path}")
 
                 return True
 
@@ -912,22 +884,19 @@ class MLXEngineService:
             local_dir = self.models_dir / sanitized_name
             
             if local_dir.exists():
-                print(f"Deleting foundation model {model_id} at {local_dir}")
+                logger.info(f"Deleting foundation model {model_id} at {local_dir}")
                 import shutil
                 shutil.rmtree(local_dir)
                 return True
             else:
-                print(f"Model {model_id} not found at {local_dir}")
+                logger.info(f"Model {model_id} not found at {local_dir}")
                 return False
         except Exception as e:
-            print(f"Failed to delete {model_id}: {e}")
+            logger.error(f"Failed to delete {model_id}: {e}")
             raise e
 
     async def export_model(self, model_id: str, output_path: str, q_bits: int = 4):
-        """
-        Phase 9: Professional Export with Quantization.
-        Fuses adapters with base model and applies quantization.
-        """
+        """Fuse adapters with base model and apply quantization."""
         config = self._get_model_config_by_id(model_id)
         if not config:
             raise ValueError("Model not found")
@@ -935,7 +904,7 @@ class MLXEngineService:
         base_model = config["base_model"] if config.get("is_finetuned") else model_id
         adapter_path = config.get("adapter_path")
         
-        print(f"Exporting model {model_id} to {output_path} (Quant: {q_bits} bits)...")
+        logger.info(f"Exporting model {model_id} to {output_path} (Quant: {q_bits} bits)...")
         
         from mlx_lm import fuse
         
@@ -949,8 +918,8 @@ class MLXEngineService:
                 save_path=output_path,
                 q_bits=q_bits
             ))
-            print(f"Model exported successfully to {output_path}")
+            logger.info(f"Model exported successfully to {output_path}")
             return {"status": "success", "path": output_path}
         except Exception as e:
-            print(f"Export failed: {e}")
+            logger.error(f"Export failed: {e}")
             raise e
