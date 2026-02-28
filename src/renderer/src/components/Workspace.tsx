@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { PageHeader } from './ui/PageHeader'
 import { Wand2, Sparkles, Languages, Copy, Loader2 } from 'lucide-react'
 import { SimpleMdeReact } from "react-simplemde-editor";
@@ -10,6 +10,13 @@ export function Workspace() {
     const { activeModel } = useGlobalState()
     const [documentBody, setDocumentBody] = useState('# Project Alpha\n\nStart writing here or use the AI to generate content...')
     const [isGenerating, setIsGenerating] = useState(false)
+
+    const editorOptions = useMemo(() => ({
+        toolbar: false as const,
+        status: false as const,
+        spellChecker: false,
+        placeholder: "Type '/' for AI commands...",
+    }), [])
 
     // Real AI Generation using the loaded model
     const handleAiCommand = async (command: string) => {
@@ -108,12 +115,7 @@ export function Workspace() {
                         <SimpleMdeReact
                             value={documentBody}
                             onChange={setDocumentBody}
-                            options={{
-                                toolbar: false,
-                                status: false,
-                                spellChecker: false,
-                                placeholder: "Type '/' for AI commands...",
-                            }}
+                            options={editorOptions}
                         />
                     </div>
                 </div>
