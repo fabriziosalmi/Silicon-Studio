@@ -4,24 +4,38 @@ import ReactMarkdown from 'react-markdown'
 const DEBOUNCE_MS = 120
 
 /**
- * Memoized markdown renderer — only re-renders when `content` prop changes.
- * Wrapping ReactMarkdown in memo prevents parent re-renders from
- * triggering an expensive markdown parse.
+ * Custom components for ReactMarkdown — dark-themed code blocks.
  */
+const markdownComponents = {
+  code({ className, children, ...props }: React.ComponentPropsWithoutRef<'code'> & { className?: string }) {
+    const isBlock = className?.startsWith('language-')
+    if (isBlock) {
+      return (
+        <pre className="bg-white/[0.04] border border-white/[0.06] rounded-lg px-3 py-2 my-2 overflow-x-auto">
+          <code className={`text-xs font-mono text-gray-200 ${className}`} {...props}>
+            {children}
+          </code>
+        </pre>
+      )
+    }
+    return (
+      <code className="bg-white/[0.06] px-1.5 py-0.5 rounded text-[13px] font-mono text-blue-300" {...props}>
+        {children}
+      </code>
+    )
+  },
+  pre({ children }: React.ComponentPropsWithoutRef<'pre'>) {
+    // Let the code component handle the <pre> wrapper for fenced blocks
+    return <>{children}</>
+  },
+}
+
 const MemoizedMarkdown = memo(function MemoizedMarkdown({ content }: { content: string }) {
-  return <ReactMarkdown>{content}</ReactMarkdown>
+  return <ReactMarkdown components={markdownComponents}>{content}</ReactMarkdown>
 })
 
 /**
  * Renders markdown with debounced updates during streaming.
- *
- * While content is actively growing (token-by-token), this component
- * debounces the expensive ReactMarkdown parse. It shows the last-rendered
- * markdown plus a raw-text tail for the un-parsed portion, so the user
- * always sees the latest text without lag.
- *
- * When content stops growing (stream done), it renders the final markdown
- * immediately.
  */
 export function StreamingMarkdown({ content }: { content: string }) {
   const [renderedContent, setRenderedContent] = useState(content)
@@ -33,13 +47,11 @@ export function StreamingMarkdown({ content }: { content: string }) {
     prevLenRef.current = content.length
 
     if (!isGrowing) {
-      // Content replaced or stream finished — render immediately
       if (timerRef.current) clearTimeout(timerRef.current)
       setRenderedContent(content)
       return
     }
 
-    // Content is growing (streaming) — debounce the markdown parse
     if (timerRef.current) clearTimeout(timerRef.current)
     timerRef.current = setTimeout(() => {
       setRenderedContent(content)
@@ -50,7 +62,6 @@ export function StreamingMarkdown({ content }: { content: string }) {
     }
   }, [content])
 
-  // If markdown hasn't caught up, show the tail as raw text
   const tail = content.slice(renderedContent.length)
 
   return (
