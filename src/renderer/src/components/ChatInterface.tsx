@@ -1342,6 +1342,7 @@ function ResponseActions({
     const [promptDetailsOpen, setPromptDetailsOpen] = useState(false);
     const prevAssessmentRef = useRef(assessment);
     const perspRef = useRef<HTMLDivElement>(null);
+    const assessRef = useRef<HTMLDivElement>(null);
 
     // Auto-show panel when assessment finishes loading
     useEffect(() => {
@@ -1363,6 +1364,18 @@ function ResponseActions({
         return () => document.removeEventListener('mousedown', handler);
     }, [showPerspectives]);
 
+    // Close assessment popover on outside click
+    useEffect(() => {
+        if (!showAssessment) return;
+        const handler = (e: MouseEvent) => {
+            if (assessRef.current && !assessRef.current.contains(e.target as Node)) {
+                setShowAssessment(false);
+            }
+        };
+        document.addEventListener('mousedown', handler);
+        return () => document.removeEventListener('mousedown', handler);
+    }, [showAssessment]);
+
     const perspectives = [
         { key: 'perspective_ceo', label: 'CEO', icon: <User className="w-3 h-3" /> },
         { key: 'perspective_child', label: 'ELI8', icon: <Baby className="w-3 h-3" /> },
@@ -1371,8 +1384,10 @@ function ResponseActions({
     ];
     const enabledPerspectives = perspectives.filter(p => isOn(p.key));
 
+    // Once assessment scores are loaded, the inline bar is always visible
+    const hasScores = assessment && assessment !== 'loading';
     const hasVisiblePanel =
-        (showAssessment && assessment && assessment !== 'loading') ||
+        hasScores ||
         (showPrompt && promptDetailsOpen) ||
         showPerspectives;
 
@@ -1456,26 +1471,51 @@ function ResponseActions({
                 )}
                 {/* Ethical self-assessment */}
                 {onAssess && (
-                    <button
-                        onClick={() => {
-                            if (!assessment) onAssess();
-                            setShowAssessment(!showAssessment);
-                        }}
-                        className={`p-1 rounded transition-colors ${
-                            assessment && assessment !== 'loading'
-                                ? 'text-emerald-400 hover:bg-emerald-500/10'
-                                : assessment === 'loading'
-                                    ? 'text-gray-500 cursor-wait'
-                                    : 'text-gray-600 hover:text-emerald-400 hover:bg-emerald-500/5'
-                        }`}
-                        title={assessment === 'loading' ? 'Assessing...' : assessment ? 'Toggle assessment' : 'Ethical assessment'}
-                        disabled={assessment === 'loading'}
-                    >
-                        {assessment === 'loading'
-                            ? <Loader2 className="w-3 h-3 animate-spin" />
-                            : <ShieldCheck className="w-3 h-3" />
-                        }
-                    </button>
+                    <div className="relative flex items-center" ref={assessRef}>
+                        <button
+                            onClick={() => {
+                                if (!assessment) onAssess();
+                                else setShowAssessment(!showAssessment);
+                            }}
+                            className={`p-1 rounded transition-colors ${
+                                assessment && assessment !== 'loading'
+                                    ? 'text-emerald-400 hover:bg-emerald-500/10'
+                                    : assessment === 'loading'
+                                        ? 'text-gray-500 cursor-wait'
+                                        : 'text-gray-600 hover:text-emerald-400 hover:bg-emerald-500/5'
+                            }`}
+                            title={assessment === 'loading' ? 'Assessing...' : assessment ? 'Click for details' : 'Ethical assessment'}
+                            disabled={assessment === 'loading'}
+                        >
+                            {assessment === 'loading'
+                                ? <Loader2 className="w-3 h-3 animate-spin" />
+                                : <ShieldCheck className="w-3 h-3" />
+                            }
+                        </button>
+                        {/* Inline compact score */}
+                        {assessment && assessment !== 'loading' && (() => {
+                            const dims: (keyof SelfAssessment)[] = ['privacy', 'fairness', 'safety', 'transparency', 'ethics', 'reliability'];
+                            const avg = Math.round(dims.reduce((s, k) => s + assessment[k], 0) / dims.length);
+                            const color = avg >= 80 ? 'bg-emerald-500' : avg >= 60 ? 'bg-yellow-500' : avg >= 40 ? 'bg-orange-500' : 'bg-red-500';
+                            const textColor = avg >= 80 ? 'text-emerald-400' : avg >= 60 ? 'text-yellow-400' : avg >= 40 ? 'text-orange-400' : 'text-red-400';
+                            return (
+                                <button
+                                    onClick={() => setShowAssessment(!showAssessment)}
+                                    className="flex items-center gap-1.5 ml-0.5 px-1 py-0.5 rounded hover:bg-white/5 transition-colors"
+                                    title="Click for details"
+                                >
+                                    <div className="w-12 h-1 bg-white/10 rounded-full overflow-hidden">
+                                        <div className={`h-full rounded-full ${color}`} style={{ width: `${avg}%` }} />
+                                    </div>
+                                    <span className={`text-[10px] font-mono font-medium ${textColor}`}>{avg}</span>
+                                </button>
+                            );
+                        })()}
+                        {/* Detail popover */}
+                        {showAssessment && assessment && assessment !== 'loading' && (
+                            <AssessmentPopover scores={assessment} />
+                        )}
+                    </div>
                 )}
                 {/* Stats inline */}
                 {stats && stats.totalTokens > 0 && (
@@ -1489,10 +1529,6 @@ function ResponseActions({
                     </div>
                 )}
             </div>
-            {/* Ethical assessment scores */}
-            {showAssessment && assessment && assessment !== 'loading' && (
-                <AssessmentPanel scores={assessment} />
-            )}
             {/* Show Prompt — what was actually sent */}
             {showPrompt && (
                 <details className="mt-1.5" onToggle={(e) => setPromptDetailsOpen(e.currentTarget.open)}>
@@ -1509,7 +1545,7 @@ function ResponseActions({
     );
 }
 
-function AssessmentPanel({ scores }: { scores: SelfAssessment }) {
+function AssessmentPopover({ scores }: { scores: SelfAssessment }) {
     const dimensions: { key: keyof SelfAssessment; label: string }[] = [
         { key: 'privacy', label: 'Privacy' },
         { key: 'fairness', label: 'Fairness' },
@@ -1518,23 +1554,19 @@ function AssessmentPanel({ scores }: { scores: SelfAssessment }) {
         { key: 'ethics', label: 'Ethics' },
         { key: 'reliability', label: 'Reliability' },
     ];
-    const avg = Math.round(dimensions.reduce((s, d) => s + scores[d.key], 0) / dimensions.length);
     const barColor = (v: number) =>
         v >= 80 ? 'bg-emerald-500' : v >= 60 ? 'bg-yellow-500' : v >= 40 ? 'bg-orange-500' : 'bg-red-500';
 
     return (
-        <div className="mt-2 p-2.5 rounded-lg bg-white/[0.02] border border-white/5">
+        <div className="absolute bottom-full left-0 mb-1 p-2.5 rounded-lg bg-[#1a1a1a] border border-white/10 shadow-xl z-50 min-w-[220px]">
             <div className="flex items-center gap-2 mb-2">
                 <ShieldCheck className="w-3 h-3 text-emerald-400" />
                 <span className="text-[10px] font-medium text-gray-400">Self-Assessment</span>
-                <span className={`text-[10px] font-mono font-medium ml-auto ${avg >= 80 ? 'text-emerald-400' : avg >= 60 ? 'text-yellow-400' : 'text-orange-400'}`}>
-                    {avg}/100
-                </span>
             </div>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+            <div className="space-y-1.5">
                 {dimensions.map(d => (
                     <div key={d.key} className="flex items-center gap-2">
-                        <span className="text-[10px] text-gray-500 w-20 shrink-0">{d.label}</span>
+                        <span className="text-[10px] text-gray-500 w-[76px] shrink-0">{d.label}</span>
                         <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden">
                             <div
                                 className={`h-full rounded-full ${barColor(scores[d.key])}`}
