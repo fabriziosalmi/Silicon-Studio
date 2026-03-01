@@ -78,8 +78,7 @@ def test_start_rejects_empty_model_path():
         "host": "127.0.0.1",
         "port": 8080,
     })
-    assert resp.status_code == 400
-    assert "model_path" in resp.json()["detail"].lower()
+    assert resp.status_code == 422
 
 
 def test_start_rejects_whitespace_model_path():
@@ -88,7 +87,7 @@ def test_start_rejects_whitespace_model_path():
         "host": "127.0.0.1",
         "port": 8080,
     })
-    assert resp.status_code == 400
+    assert resp.status_code == 422
 
 
 def test_start_rejects_port_below_1024():

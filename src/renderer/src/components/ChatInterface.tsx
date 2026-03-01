@@ -27,7 +27,7 @@ const SETTINGS_STORAGE_KEY = 'silicon-studio-chat-settings';
 const CONVERSATIONS_MIGRATED_KEY = 'silicon-studio-conversations-migrated';
 
 export function ChatInterface() {
-    const { activeModel, pendingChatInput, setPendingChatInput } = useGlobalState()
+    const { activeModel, setActiveModel, backendReady, pendingChatInput, setPendingChatInput } = useGlobalState()
 
     const [messages, setMessages] = useState<Message[]>(() => {
         try {
@@ -115,6 +115,58 @@ export function ChatInterface() {
     const [showMemoryMap, setShowMemoryMap] = useState(false)
     const [memoryBuilding, setMemoryBuilding] = useState(false)
     const memoryBuildingRef = useRef(false)
+
+    // One-click model walkthrough
+    const [walkthroughStep, setWalkthroughStep] = useState<'idle' | 'downloading' | 'loading' | 'done' | 'error'>('idle')
+    const [walkthroughModel, setWalkthroughModel] = useState<string | null>(null)
+    const [walkthroughError, setWalkthroughError] = useState<string | null>(null)
+    const walkthroughPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+    const startWalkthrough = async (modelId: string) => {
+        setWalkthroughModel(modelId)
+        setWalkthroughStep('downloading')
+        setWalkthroughError(null)
+        try {
+            await apiClient.engine.downloadModel(modelId)
+            // Poll models list until downloaded
+            walkthroughPollRef.current = setInterval(async () => {
+                try {
+                    const models = await apiClient.engine.getModels()
+                    const target = models.find(m => m.id === modelId)
+                    if (target?.downloaded) {
+                        if (walkthroughPollRef.current) clearInterval(walkthroughPollRef.current)
+                        walkthroughPollRef.current = null
+                        setWalkthroughStep('loading')
+                        try {
+                            const loadResult = await apiClient.engine.loadModel(modelId)
+                            setActiveModel({
+                                id: modelId,
+                                name: target.name,
+                                size: target.size,
+                                path: target.local_path || '',
+                                architecture: loadResult.architecture,
+                                context_window: loadResult.context_window,
+                            })
+                            setWalkthroughStep('done')
+                        } catch {
+                            setWalkthroughStep('error')
+                            setWalkthroughError('Download succeeded but failed to load model. Try loading it from the Models tab.')
+                        }
+                    }
+                } catch { /* poll failed, keep trying */ }
+            }, 3000)
+        } catch {
+            setWalkthroughStep('error')
+            setWalkthroughError('Failed to start download. Check that the backend is running.')
+        }
+    }
+
+    // Cleanup walkthrough poll on unmount
+    useEffect(() => {
+        return () => {
+            if (walkthroughPollRef.current) clearInterval(walkthroughPollRef.current)
+        }
+    }, [])
 
     // In-chat search
     const [showSearch, setShowSearch] = useState(false)
@@ -1152,6 +1204,60 @@ Return exactly this JSON structure (no other text):
                                             : 'Load a model from the Models tab to start chatting.'
                                         }
                                     </p>
+
+                                    {/* One-click model download walkthrough */}
+                                    {!currentModelId && backendReady && walkthroughStep !== 'done' && (
+                                        <div className="mt-6 p-4 bg-white/[0.02] border border-white/5 rounded-xl max-w-sm mx-auto">
+                                            {walkthroughStep === 'idle' && (
+                                                <>
+                                                    <p className="text-xs text-gray-400 mb-3">No models yet? Get started in one click:</p>
+                                                    <button
+                                                        onClick={() => startWalkthrough('mlx-community/Qwen3-0.6B-4bit')}
+                                                        className="w-full flex items-center gap-3 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white rounded-lg text-sm font-semibold transition-colors mb-2"
+                                                    >
+                                                        <Download className="w-4 h-4" />
+                                                        Download Qwen 3 0.6B (0.4 GB)
+                                                    </button>
+                                                    <button
+                                                        onClick={() => startWalkthrough('mlx-community/Llama-3.2-1B-Instruct-4bit')}
+                                                        className="w-full flex items-center gap-3 px-4 py-2.5 bg-white/5 hover:bg-white/10 text-gray-300 rounded-lg text-xs transition-colors"
+                                                    >
+                                                        <Download className="w-3.5 h-3.5" />
+                                                        Or try Llama 3.2 1B (~0.7 GB)
+                                                    </button>
+                                                </>
+                                            )}
+                                            {walkthroughStep === 'downloading' && (
+                                                <div className="flex items-center gap-3 text-sm text-gray-300">
+                                                    <div className="w-5 h-5 border-2 border-blue-500/30 border-t-blue-500 rounded-full animate-spin shrink-0" />
+                                                    <div className="text-left">
+                                                        <p className="font-medium">Downloading {walkthroughModel?.split('/').pop()}...</p>
+                                                        <p className="text-xs text-gray-500 mt-0.5">This may take a few minutes</p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {walkthroughStep === 'loading' && (
+                                                <div className="flex items-center gap-3 text-sm text-gray-300">
+                                                    <div className="w-5 h-5 border-2 border-green-500/30 border-t-green-500 rounded-full animate-spin shrink-0" />
+                                                    <div className="text-left">
+                                                        <p className="font-medium">Loading model into memory...</p>
+                                                        <p className="text-xs text-gray-500 mt-0.5">Almost ready</p>
+                                                    </div>
+                                                </div>
+                                            )}
+                                            {walkthroughStep === 'error' && (
+                                                <div className="text-left">
+                                                    <p className="text-sm text-red-400 mb-2">{walkthroughError}</p>
+                                                    <button
+                                                        onClick={() => { setWalkthroughStep('idle'); setWalkthroughError(null) }}
+                                                        className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+                                                    >
+                                                        Try again
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             </div>
                         ) : (
@@ -1256,7 +1362,7 @@ Return exactly this JSON structure (no other text):
                                                                 </span>
                                                             </summary>
                                                             <div className="mt-2 pl-4 border-l border-white/5 text-xs text-gray-500 leading-relaxed max-h-64 overflow-y-auto">
-                                                                <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                                                                <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={{ hr: () => <hr className="border-white/[0.03] my-2" /> }}>
                                                                     {thinkingContent}
                                                                 </ReactMarkdown>
                                                             </div>

@@ -39,7 +39,7 @@ def _read_output(pipe, label: str):
         pipe.close()
 
 class StartRequest(BaseModel):
-    model_path: str = Field(min_length=1, max_length=1024)
+    model_path: str = Field(min_length=1, max_length=1024, pattern=r'\S')
     host: str = Field(default="127.0.0.1", max_length=255)
     port: int = Field(default=8080, ge=1024, le=65535)
 
@@ -48,9 +48,6 @@ async def start_server(req: StartRequest):
     global server_process, server_start_time
     if server_process is not None and server_process.poll() is None:
         raise HTTPException(status_code=400, detail="Server is already running.")
-
-    if not req.model_path or req.model_path.strip() == "":
-        raise HTTPException(status_code=400, detail="A valid model_path is required.")
 
     cmd = [
         "python", "-m", "mlx_lm.server",

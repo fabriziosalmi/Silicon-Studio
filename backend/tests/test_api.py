@@ -74,7 +74,7 @@ def test_deployment_start_requires_model_path():
         "host": "127.0.0.1",
         "port": 8080
     })
-    assert response.status_code == 400
+    assert response.status_code == 422
 
 
 def test_deployment_port_validation():
