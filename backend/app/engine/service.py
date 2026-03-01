@@ -6,6 +6,7 @@ import gc
 import asyncio
 import threading
 import os
+import sys
 import json
 import logging
 import tempfile
@@ -66,16 +67,43 @@ class MLXEngineService:
         logger.info(f"Auto-discovery complete. Found {discovered_count} new local models.")
 
     def _load_models_config(self):
-        # Load directly from models.json as the source of truth
+        # Load user config
+        user_models = []
         if self.models_config_path.exists():
             try:
                 with open(self.models_config_path, "r") as f:
-                    return json.load(f)
+                    user_models = json.load(f)
             except Exception as e:
                 logger.error(f"Error loading models.json: {e}")
-                return []
-        else:
-            return []
+
+        # Merge bundled catalog so discover tab has entries
+        catalog = self._load_bundled_catalog()
+        if catalog:
+            existing_ids = {m["id"] for m in user_models}
+            added = 0
+            for m in catalog:
+                if m["id"] not in existing_ids:
+                    user_models.append(m)
+                    added += 1
+            if added:
+                logger.info(f"Merged {added} models from bundled catalog")
+        return user_models
+
+    def _load_bundled_catalog(self):
+        """Load the bundled models.json catalog (shipped with the app)."""
+        # When running from PyInstaller bundle
+        candidates = [
+            Path(getattr(sys, '_MEIPASS', '')) / "models.json",
+            Path(__file__).resolve().parent.parent.parent.parent / "models.json",
+        ]
+        for p in candidates:
+            if p.exists():
+                try:
+                    with open(p, "r") as f:
+                        return json.load(f)
+                except Exception as e:
+                    logger.debug(f"Failed to load bundled catalog from {p}: {e}")
+        return []
 
     def _save_models_config(self):
         """Atomic write: temp file + os.replace to prevent corruption on crash."""
