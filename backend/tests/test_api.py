@@ -8,7 +8,7 @@ client = TestClient(app)
 def test_health_check():
     response = client.get("/health")
     assert response.status_code == 200
-    assert response.json() == {"status": "ok", "service": "silicon-studio-engine"}
+    assert response.json() == {"status": "ok", "service": "silicondev-engine"}
 
 
 def test_cors_headers():
@@ -86,15 +86,15 @@ def test_deployment_port_validation():
     assert response.status_code == 422  # Pydantic validation error
 
 
-def test_mcp_generation_returns_501():
-    """MCP generation endpoint should return 501 (not implemented)."""
+def test_mcp_generation_rejects_unknown_server():
+    """MCP generation endpoint rejects unknown server IDs."""
     response = client.post("/api/preparation/generate-mcp", json={
         "model_id": "test",
-        "server_id": "test",
+        "server_id": "nonexistent",
         "prompt": "test",
         "output_path": "/tmp/test.jsonl"
     })
-    assert response.status_code == 501
+    assert response.status_code == 400
 
 
 def test_preview_csv_validation():
@@ -144,7 +144,7 @@ def test_export_qbits_validation():
     response = client.post("/api/engine/models/export", json={
         "model_id": "test",
         "output_path": "/tmp/out",
-        "q_bits": 0  # below minimum
+        "q_bits": -1  # below minimum
     })
     assert response.status_code == 422
 

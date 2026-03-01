@@ -36,8 +36,8 @@ Returns `{"status": "ok"}` when the backend is running. The frontend polls this 
 
 The backend allows requests from:
 - `http://localhost:5173` (Vite dev server)
-- `http://localhost:8000`
-- All `app://` origins (Electron)
+- `http://127.0.0.1:5173`
+- `app://.` (Electron)
 
 ## Error Format
 

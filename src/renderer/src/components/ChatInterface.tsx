@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { apiClient, cleanModelName } from '../api/client'
 import type { SandboxResult, SyntaxCheckResult, SelfAssessment, ConversationMemory } from '../api/client'
 import { PageHeader } from './ui/PageHeader'
-import { Settings2, Cpu, Copy, Check, ChevronRight, ChevronLeft, Square, ArrowUp, Wand2, Shield, Zap, FileText, TestTube2, Expand, Shrink, Languages, Briefcase, MessageCircle, GraduationCap, Scale, Eye, EyeOff, User, Baby, FlaskConical, Feather, Plus, Download, GitFork, Play, Loader2, CircleCheck, CircleX, ShieldCheck, Brain, Globe, RefreshCcw, Database, Bot, Search, X, ChevronUp, ChevronDown, ChevronsLeft, ChevronsRight } from 'lucide-react'
+import { Settings2, Cpu, Copy, Check, ChevronRight, ChevronLeft, Square, ArrowUp, Wand2, Shield, Zap, FileText, TestTube2, Expand, Shrink, Languages, Briefcase, MessageCircle, GraduationCap, Scale, Eye, EyeOff, User, Baby, FlaskConical, Feather, Plus, Download, GitFork, Play, Loader2, CircleCheck, CircleX, ShieldCheck, Brain, Globe, RefreshCcw, Database, Bot, Search, X, ChevronUp, ChevronDown, ChevronsRight } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -568,7 +568,7 @@ export function ChatInterface() {
     };
 
     // Inline rewrite: calls the model API directly, returns the rewritten code
-    const rewriteSnippet = async (code: string, action: string, context?: string): Promise<string> => {
+    const rewriteSnippet = useCallback(async (code: string, action: string, context?: string): Promise<string> => {
         const buildPrompt = codeActionPrompts[action];
         if (!buildPrompt || !currentModelId) throw new Error('Cannot rewrite');
         const prompt = buildPrompt(code, context);
@@ -608,7 +608,7 @@ export function ChatInterface() {
         // Extract code from markdown fence
         const fenceMatch = accumulated.match(/```[\w]*\n([\s\S]*?)```/);
         return fenceMatch ? fenceMatch[1].trimEnd() : accumulated.trim();
-    };
+    }, [currentModelId, settings.temperature, settings.maxTokens]); // eslint-disable-line react-hooks/exhaustive-deps
 
     // Ethical self-assessment: ask the model to rate its own response
     const assessResponse = async (response: string, msgIndex: number) => {
@@ -891,14 +891,44 @@ Return exactly this JSON structure (no other text):
         return null;
     }, [currentModelId]);
 
-    const sendCodeAction = (code: string, _action: string) => {
+    const sendCodeAction = useCallback((code: string, _action: string) => {
         if (isGenerating || !currentModelId) return;
         // Tests go through chat (produces a separate file, not a rewrite)
         const prompt = `Write tests for the following code. Do NOT modify the original code. Generate a complete test file with good coverage of edge cases, typical usage, and error conditions. Use the most appropriate testing framework for the language.\n\n\`\`\`\n${code}\n\`\`\``;
         const lineCount = code.split('\n').length;
         const display = `**Tests** — ${lineCount} lines`;
         handleSend(prompt, display, 'tests');
-    }
+    }, [isGenerating, currentModelId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Memoize ReactMarkdown components so CodeBlock instances are not remounted on unrelated re-renders
+    const markdownComponents = useMemo(() => ({
+        hr: () => <hr className="border-white/[0.03] my-3" />,
+        code({ className, children }: { className?: string; children?: React.ReactNode }) {
+            const match = /language-(\w+)/.exec(className || '');
+            const codeString = String(children).replace(/\n$/, '');
+            // Inline code (no language class, short, no newlines)
+            if (!match && !codeString.includes('\n')) {
+                return <code className="bg-white/5 px-1.5 py-0.5 rounded text-blue-300 text-[13px]">{children}</code>;
+            }
+            // Fenced code block
+            return (
+                <CodeBlock
+                    code={codeString}
+                    language={match?.[1] || ''}
+                    onTestAction={sendCodeAction}
+                    onRewrite={rewriteSnippet}
+                    enabledActions={settings.enabledActions}
+                    syntaxCheck={settings.syntaxCheck}
+                    autoFixSyntax={settings.autoFixSyntax}
+                    piiRedaction={settings.piiRedaction}
+                />
+            );
+        },
+        pre({ children }: { children?: React.ReactNode }) {
+            // Let CodeBlock handle its own wrapper
+            return <>{children}</>;
+        }
+    }), [sendCodeAction, rewriteSnippet, settings.enabledActions, settings.syntaxCheck, settings.autoFixSyntax, settings.piiRedaction]);
 
     const getTranslateLanguage = () => {
         if (settings.translateLanguage) return settings.translateLanguage;
@@ -1240,34 +1270,7 @@ Return exactly this JSON structure (no other text):
                                                     <div className="prose prose-invert prose-sm max-w-none text-gray-200 leading-relaxed prose-p:my-2 prose-pre:bg-transparent prose-pre:p-0 prose-pre:m-0 prose-code:text-blue-300 prose-code:font-normal prose-headings:font-semibold prose-headings:text-gray-100 prose-hr:border-transparent">
                                                         <ReactMarkdown
                                                             remarkPlugins={[remarkGfm, remarkBreaks]}
-                                                            components={{
-                                                                hr: () => <hr className="border-white/[0.03] my-3" />,
-                                                                code({ className, children }) {
-                                                                    const match = /language-(\w+)/.exec(className || '');
-                                                                    const codeString = String(children).replace(/\n$/, '');
-                                                                    // Inline code (no language class, short, no newlines)
-                                                                    if (!match && !codeString.includes('\n')) {
-                                                                        return <code className="bg-white/5 px-1.5 py-0.5 rounded text-blue-300 text-[13px]">{children}</code>;
-                                                                    }
-                                                                    // Fenced code block
-                                                                    return (
-                                                                        <CodeBlock
-                                                                            code={codeString}
-                                                                            language={match?.[1] || ''}
-                                                                            onTestAction={sendCodeAction}
-                                                                            onRewrite={rewriteSnippet}
-                                                                            enabledActions={settings.enabledActions}
-                                                                            syntaxCheck={settings.syntaxCheck}
-                                                                            autoFixSyntax={settings.autoFixSyntax}
-                                                                            piiRedaction={settings.piiRedaction}
-                                                                        />
-                                                                    );
-                                                                },
-                                                                pre({ children }) {
-                                                                    // Let CodeBlock handle its own wrapper
-                                                                    return <>{children}</>;
-                                                                }
-                                                            }}
+                                                            components={markdownComponents}
                                                         >
                                                             {visibleContent}
                                                         </ReactMarkdown>
@@ -1349,7 +1352,7 @@ Return exactly this JSON structure (no other text):
                 </div>
 
                 {/* Parameters Sidebar — mirrors left sidebar style */}
-                <div className={`${paramsExpanded ? 'w-72' : 'w-14'} bg-black/40 flex flex-col shrink-0 border-l border-white/5 transition-all duration-200 overflow-hidden`}>
+                <div className={`${paramsExpanded ? 'w-72 border-l border-white/5 bg-black/40' : 'w-0'} flex flex-col shrink-0 transition-all duration-200 overflow-hidden`}>
                     {paramsExpanded ? (
                         <>
                             <nav className="flex-1 overflow-y-auto px-4 pt-6">
@@ -1633,18 +1636,7 @@ Return exactly this JSON structure (no other text):
                                 <ChevronsRight size={16} />
                             </button>
                         </>
-                    ) : (
-                        <>
-                            <div className="flex-1" />
-                            <button
-                                onClick={toggleParams}
-                                className="mx-auto mb-4 p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/10 transition-colors shrink-0"
-                                title="Expand parameters"
-                            >
-                                <ChevronsLeft size={16} />
-                            </button>
-                        </>
-                    )}
+                    ) : null}
                 </div>
             </div>
         </div>

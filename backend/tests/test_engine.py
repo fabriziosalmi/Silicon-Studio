@@ -267,7 +267,7 @@ def test_export_rejects_bad_qbits():
     resp = client.post("/api/engine/models/export", json={
         "model_id": "test",
         "output_path": "/tmp/out",
-        "q_bits": 0,
+        "q_bits": -1,
     })
     assert resp.status_code == 422
 

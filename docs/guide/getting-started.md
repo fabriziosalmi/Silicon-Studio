@@ -10,8 +10,8 @@
 ## Install from Source
 
 ```bash
-git clone https://github.com/fabriziosalmi/silicondev.git
-cd silicondev
+git clone https://github.com/fabriziosalmi/Silicon-Studio.git
+cd Silicon-Studio
 
 # Frontend dependencies
 npm install

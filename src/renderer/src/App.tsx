@@ -87,7 +87,7 @@ function App() {
           </div>
           <div className="text-center">
             <h1 className="text-2xl font-bold text-white mb-2">
-              Silicon Studio
+              SiliconDev
             </h1>
             <p className="text-sm text-gray-400">{loadingMessage}</p>
           </div>

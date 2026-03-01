@@ -47,8 +47,8 @@ Actions appear below each AI response. Each can be toggled on/off in the paramet
 | CEO / ELI8 / Scientist / Poet | Rewrite from a perspective |
 | Improve / Secure / Faster | Code-specific rewrites |
 | Docs / Tests | Generate documentation or tests for code |
-| Self-Critique | Iterative critique-then-improve loop (configurable iterations) |
-| Ethical | Self-assessment with bias, safety, and accuracy scores |
+| Self-Critique | Iterative critique-then-improve loop (iterations auto-determined by context window size) |
+| Ethical | Self-assessment with privacy, fairness, safety, transparency, ethics, and reliability scores |
 
 Actions that rewrite responses skip RAG and web search to avoid polluting the prompt.
 

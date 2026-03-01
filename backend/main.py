@@ -46,7 +46,7 @@ except Exception as e:
     sys.exit(1)
 
 app = FastAPI(
-    title="Silicon Studio Backend",
+    title="SiliconDev Backend",
     description="Local-first LLM fine-tuning engine",
     version="0.1.0"
 )
@@ -79,7 +79,7 @@ app.include_router(mcp_router, prefix="/api/mcp", tags=["mcp"])
 
 @app.get("/health")
 async def health_check():
-    return {"status": "ok", "service": "silicon-studio-engine"}
+    return {"status": "ok", "service": "silicondev-engine"}
 
 if __name__ == "__main__":
     import multiprocessing

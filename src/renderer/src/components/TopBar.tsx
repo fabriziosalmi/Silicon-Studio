@@ -4,8 +4,45 @@ import { apiClient, cleanModelName } from '../api/client';
 import type { ModelEntry } from '../api/client';
 import { DatabaseZap, LogOut, ChevronDown, Loader2 } from 'lucide-react';
 
+const TOPBAR_SETTINGS_KEY = 'silicon-studio-topbar-settings';
+
+function getThresholds(): { warn: number; critical: number } {
+    try {
+        const saved = localStorage.getItem(TOPBAR_SETTINGS_KEY);
+        if (saved) {
+            const parsed = JSON.parse(saved);
+            return { warn: parsed.warn ?? 60, critical: parsed.critical ?? 85 };
+        }
+    } catch { /* ignore */ }
+    return { warn: 60, critical: 85 };
+}
+
+function usageColor(percent: number, thresholds: { warn: number; critical: number }): string {
+    if (percent >= thresholds.critical) return 'bg-red-500';
+    if (percent >= thresholds.warn) return 'bg-yellow-500';
+    return 'bg-green-500';
+}
+
+function usageTextColor(percent: number, thresholds: { warn: number; critical: number }): string {
+    if (percent >= thresholds.critical) return 'text-red-400';
+    if (percent >= thresholds.warn) return 'text-yellow-400';
+    return 'text-gray-300';
+}
+
+function MiniBar({ percent, thresholds }: { percent: number; thresholds: { warn: number; critical: number } }) {
+    return (
+        <div className="w-12 h-1.5 rounded-full bg-white/10 overflow-hidden">
+            <div
+                className={`h-full rounded-full transition-all duration-500 ${usageColor(percent, thresholds)}`}
+                style={{ width: `${Math.min(percent, 100)}%` }}
+            />
+        </div>
+    );
+}
+
 export function TopBar() {
     const { backendReady, systemStats, activeModel, setActiveModel, isTraining } = useGlobalState();
+    const thresholds = getThresholds();
     const [showModelMenu, setShowModelMenu] = useState(false);
     const [models, setModels] = useState<ModelEntry[]>([]);
     const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
@@ -58,7 +95,7 @@ export function TopBar() {
 
             {/* Left: Window Title Placeholder */}
             <div className="flex items-center space-x-2 pl-[80px]">
-                <span className="text-[10px] font-bold text-gray-500 tracking-wide uppercase">Silicon Studio</span>
+                <span className="text-[10px] font-bold text-gray-500 tracking-wide uppercase">SiliconDev</span>
             </div>
 
             {/* Center/Right: Status Indicators */}
@@ -150,20 +187,21 @@ export function TopBar() {
 
                 <div className="h-4 w-px bg-white/10" />
 
-                {/* System Stats (RAM/VRAM) */}
+                {/* System Stats (RAM/CPU) with color bars */}
                 {systemStats ? (
                     <div className="flex items-center space-x-4">
-                        <div className="flex items-center gap-1.5" title="System RAM Usage">
+                        <div className="flex items-center gap-1.5" title={`RAM: ${(systemStats.memory.used / (1024 * 1024 * 1024)).toFixed(1)}/${(systemStats.memory.total / (1024 * 1024 * 1024)).toFixed(0)}GB (${systemStats.memory.percent.toFixed(0)}%)`}>
                             <span className="text-[10px] text-gray-500 font-mono">RAM</span>
-                            <span className="text-[11px] text-gray-300 font-mono tabular-nums">
-                                {(systemStats.memory.used / (1024 * 1024 * 1024)).toFixed(1)}
-                                <span className="text-gray-500">/{(systemStats.memory.total / (1024 * 1024 * 1024)).toFixed(0)}GB</span>
+                            <MiniBar percent={systemStats.memory.percent} thresholds={thresholds} />
+                            <span className={`text-[11px] font-mono tabular-nums ${usageTextColor(systemStats.memory.percent, thresholds)}`}>
+                                {systemStats.memory.percent.toFixed(0)}%
                             </span>
                         </div>
 
-                        <div className="flex items-center gap-1.5" title="CPU Load">
+                        <div className="flex items-center gap-1.5" title={`CPU: ${systemStats.cpu.percent.toFixed(0)}%`}>
                             <span className="text-[10px] text-gray-500 font-mono">CPU</span>
-                            <span className="text-[11px] text-gray-300 font-mono tabular-nums">
+                            <MiniBar percent={systemStats.cpu.percent} thresholds={thresholds} />
+                            <span className={`text-[11px] font-mono tabular-nums ${usageTextColor(systemStats.cpu.percent, thresholds)}`}>
                                 {systemStats.cpu.percent.toFixed(0)}%
                             </span>
                         </div>

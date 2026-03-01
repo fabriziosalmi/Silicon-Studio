@@ -34,6 +34,15 @@ Default values for new conversations. See [Configuration](/guide/configuration) 
 | Chunk Size | 128-2048 | 512 | Characters per chunk during ingestion |
 | Chunk Overlap | 0-512 | 50 | Overlap between chunks |
 
+### Status Bar Thresholds
+
+Configure when RAM/CPU usage bars change color in the top status bar.
+
+| Setting | Range | Default | Description |
+|---------|-------|---------|-------------|
+| Warning % | 20-95 | 60 | Threshold for yellow (warning) color |
+| Critical % | 30-99 | 85 | Threshold for red (critical) color |
+
 ### MCP Servers
 
 Full CRUD for MCP server configurations. See [MCP Integration](/features/mcp).

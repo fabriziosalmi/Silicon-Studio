@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { Card } from './ui/Card'
 import { apiClient } from '../api/client'
-import { Settings2, MessageSquare, Brain, RotateCcw, Info, Server, Plus, Trash2, Loader2 } from 'lucide-react'
+import { Settings2, MessageSquare, Brain, RotateCcw, Info, Server, Plus, Trash2, Loader2, Gauge } from 'lucide-react'
 
 const CHAT_SETTINGS_KEY = 'silicon-studio-chat-settings'
 const RAG_SETTINGS_KEY = 'silicon-studio-rag-settings'
+const TOPBAR_SETTINGS_KEY = 'silicon-studio-topbar-settings'
 
 interface ChatDefaults {
     systemPrompt: string
@@ -36,6 +37,16 @@ const defaultChat: ChatDefaults = {
 const defaultRag: RagDefaults = {
     chunkSize: 512,
     chunkOverlap: 50,
+}
+
+interface TopBarDefaults {
+    warn: number
+    critical: number
+}
+
+const defaultTopBar: TopBarDefaults = {
+    warn: 60,
+    critical: 85,
 }
 
 function SectionHeader({ icon, title }: { icon: React.ReactNode; title: string }) {
@@ -270,10 +281,23 @@ export function Settings() {
         } catch { /* ignore */ }
     }, [chat])
 
+    const [topBar, setTopBar] = useState<TopBarDefaults>(() => {
+        try {
+            const saved = localStorage.getItem(TOPBAR_SETTINGS_KEY)
+            if (saved) return { ...defaultTopBar, ...JSON.parse(saved) }
+        } catch { /* ignore */ }
+        return { ...defaultTopBar }
+    })
+
     // Persist RAG settings on change
     useEffect(() => {
         localStorage.setItem(RAG_SETTINGS_KEY, JSON.stringify(rag))
     }, [rag])
+
+    // Persist TopBar settings on change
+    useEffect(() => {
+        localStorage.setItem(TOPBAR_SETTINGS_KEY, JSON.stringify(topBar))
+    }, [topBar])
 
     const updateChat = <K extends keyof ChatDefaults>(key: K, value: ChatDefaults[K]) => {
         setChat(prev => ({ ...prev, [key]: value }))
@@ -283,8 +307,10 @@ export function Settings() {
         if (!confirm('Reset all settings to defaults?')) return
         setChat({ ...defaultChat })
         setRag({ ...defaultRag })
+        setTopBar({ ...defaultTopBar })
         localStorage.removeItem(CHAT_SETTINGS_KEY)
         localStorage.removeItem(RAG_SETTINGS_KEY)
+        localStorage.removeItem(TOPBAR_SETTINGS_KEY)
     }
 
     return (
@@ -320,6 +346,15 @@ export function Settings() {
                             <option value="high">High</option>
                         </select>
                     </div>
+                </div>
+            </Card>
+
+            {/* Status Bar Thresholds */}
+            <Card className="p-5">
+                <SectionHeader icon={<Gauge size={16} />} title="Status Bar Thresholds" />
+                <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
+                    <SliderField label="Warning %" value={topBar.warn} onChange={(v) => setTopBar(prev => ({ ...prev, warn: v }))} min={20} max={95} step={5} hint="Yellow threshold" />
+                    <SliderField label="Critical %" value={topBar.critical} onChange={(v) => setTopBar(prev => ({ ...prev, critical: v }))} min={30} max={99} step={5} hint="Red threshold" />
                 </div>
             </Card>
 
@@ -375,7 +410,7 @@ export function Settings() {
             <Card className="p-5">
                 <div className="flex items-center justify-between">
                     <div>
-                        <h3 className="text-sm font-bold text-white">Silicon Studio</h3>
+                        <h3 className="text-sm font-bold text-white">SiliconDev</h3>
                         <p className="text-xs text-gray-500 mt-1">Local AI development environment for Apple Silicon</p>
                     </div>
                     <button

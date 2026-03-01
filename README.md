@@ -68,8 +68,9 @@ MLX-powered fine-tuning (LoRA/QLoRA) and inference on M1/M2/M3/M4 chips.
 - Agent CRUD with configurable node types
 
 ### Settings
-- Centralized settings page (chat defaults, RAG defaults, MCP servers)
+- Centralized settings page (chat defaults, RAG defaults, MCP servers, status bar thresholds)
 - Per-conversation parameter overrides
+- Color-coded RAM/CPU usage bars in top status bar
 
 ## Getting Started
 

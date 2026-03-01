@@ -189,7 +189,7 @@ export function RagKnowledge() {
                             </div>
                             <h2 className="text-xl font-bold mb-3 text-gray-200 tracking-wide">Upload Files for Embedding</h2>
                             <p className="text-[13px] text-gray-500 max-w-md mx-auto mb-6 leading-relaxed font-medium">
-                                Enter file paths (comma-separated) for PDF, TXT, MD, or DOCX files. Silicon Studio uses MLX-accelerated embeddings for maximum local speed.
+                                Enter file paths (comma-separated) for PDF, TXT, MD, or DOCX files. SiliconDev uses MLX-accelerated embeddings for maximum local speed.
                             </p>
 
                             <select

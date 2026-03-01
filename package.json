@@ -1,10 +1,10 @@
 {
-    "name": "silicon-studio",
-    "productName": "Silicon Studio",
+    "name": "silicondev",
+    "productName": "SiliconDev",
     "version": "0.1.0",
-    "description": "Local-first LLM fine-tuning on Apple Silicon",
+    "description": "Local AI development environment for Apple Silicon",
     "main": "dist/main/main.js",
-    "author": "Silicon Studio",
+    "author": "SiliconDev",
     "license": "MIT",
     "scripts": {
         "dev": "concurrently \"npm run dev:renderer\" \"npm run dev:electron\"",
@@ -15,11 +15,11 @@
         "build:main": "tsc -p src/main/tsconfig.json",
         "start": "electron .",
         "package": "npm run build && npm run build:backend && electron-builder build --mac",
-        "build:backend": "cd backend && /opt/anaconda3/bin/python3 -m PyInstaller spec/silicon_server.spec --clean --noconfirm"
+        "build:backend": "cd backend && .venv/bin/python -m PyInstaller spec/silicon_server.spec --clean --noconfirm"
     },
     "build": {
-        "appId": "com.siliconstudio.app",
-        "productName": "Silicon Studio",
+        "appId": "com.silicondev.app",
+        "productName": "SiliconDev",
         "directories": {
             "output": "release"
         },
