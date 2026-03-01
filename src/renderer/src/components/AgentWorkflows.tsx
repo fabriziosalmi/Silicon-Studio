@@ -10,6 +10,7 @@ export function AgentWorkflows() {
     const [loading, setLoading] = useState(false)
     const [executing, setExecuting] = useState(false)
     const [searchTerm, setSearchTerm] = useState("")
+    const [agentInput, setAgentInput] = useState("")
 
     useEffect(() => {
         fetchAgents()
@@ -54,7 +55,7 @@ export function AgentWorkflows() {
         if (!activeAgent || !activeAgent.id) return
         try {
             setExecuting(true)
-            const result = await apiClient.agents.execute(activeAgent.id, "Test Input")
+            const result = await apiClient.agents.execute(activeAgent.id, agentInput || "Test Input")
             console.log("Execution Result:", result)
             alert(`Execution Successful!\nCompleted ${result.steps?.length || 0} nodes in ${result.execution_time?.toFixed(2)}s`)
         } catch (e) {
@@ -201,6 +202,15 @@ export function AgentWorkflows() {
                             {/* Canvas Action HUD */}
                             <div className="absolute bottom-6 left-1/2 -translate-x-1/2 bg-[#18181B]/90 backdrop-blur-md border border-white/10 px-6 py-3 rounded-full flex items-center gap-4">
                                 <span className="text-xs font-bold text-gray-400 uppercase tracking-wide">Pipeline Status: <span className={executing ? "text-blue-400" : "text-amber-500"}>{executing ? "Running..." : "Ready"}</span></span>
+                                <div className="h-4 w-px bg-white/20" />
+                                <input
+                                    type="text"
+                                    placeholder="Enter input..."
+                                    value={agentInput}
+                                    onChange={(e) => setAgentInput(e.target.value)}
+                                    disabled={executing}
+                                    className="bg-black/40 border border-white/10 rounded-lg px-3 py-1 text-xs text-white outline-none focus:border-blue-500/50 w-48 disabled:opacity-50"
+                                />
                                 <div className="h-4 w-px bg-white/20" />
                                 <button
                                     onClick={handleExecuteAgent}

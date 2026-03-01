@@ -135,15 +135,15 @@ class SandboxService:
 
             elapsed = round(time.monotonic() - start, 3)
 
-            stdout = stdout_bytes[:MAX_OUTPUT_BYTES].decode("utf-8", errors="replace")
-            stderr = stderr_bytes[:MAX_OUTPUT_BYTES].decode("utf-8", errors="replace")
+            stdout = _ANSI_RE.sub("", stdout_bytes[:MAX_OUTPUT_BYTES].decode("utf-8", errors="replace"))
+            stderr = _ANSI_RE.sub("", stderr_bytes[:MAX_OUTPUT_BYTES].decode("utf-8", errors="replace"))
             if timed_out:
                 stderr += f"\n[Killed: exceeded {timeout}s timeout]"
 
             return {
                 "stdout": stdout,
                 "stderr": stderr,
-                "exit_code": process.returncode or -1 if timed_out else process.returncode,
+                "exit_code": (process.returncode or -1) if timed_out else process.returncode,
                 "execution_time": elapsed,
                 "language": lang,
                 "timed_out": timed_out,

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { apiClient } from '../api/client';
 
 interface SystemStats {
@@ -55,7 +55,10 @@ export function GlobalStateProvider({ children }: { children: React.ReactNode })
     const [isTraining, setIsTraining] = useState(false);
     const [pendingChatInput, setPendingChatInput] = useState<string | null>(null);
 
-    // Poll backend health + stats via HTTP instead of non-existent WebSocket
+    // Poll backend health + stats — only update state when values actually change
+    // to avoid unnecessary re-renders that cause visible flicker
+    const lastStatsJson = useRef<string>('');
+
     useEffect(() => {
         let mounted = true;
 
@@ -63,19 +66,24 @@ export function GlobalStateProvider({ children }: { children: React.ReactNode })
             try {
                 const healthy = await apiClient.checkHealth();
                 if (!mounted) return;
-                setBackendReady(healthy);
+                setBackendReady(prev => prev === healthy ? prev : healthy);
 
                 if (healthy) {
                     const stats = await apiClient.monitor.getStats();
-                    if (mounted) setSystemStats(stats as unknown as SystemStats);
+                    if (!mounted) return;
+                    const json = JSON.stringify(stats);
+                    if (json !== lastStatsJson.current) {
+                        lastStatsJson.current = json;
+                        setSystemStats(stats as unknown as SystemStats);
+                    }
                 }
             } catch {
-                if (mounted) setBackendReady(false);
+                if (mounted) setBackendReady(prev => prev ? false : prev);
             }
         };
 
         poll();
-        const interval = setInterval(poll, 3000);
+        const interval = setInterval(poll, 5000);
         return () => { mounted = false; clearInterval(interval); };
     }, []);
 

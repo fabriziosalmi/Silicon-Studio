@@ -13,7 +13,7 @@ export function Deployment() {
     const { activeModel } = useGlobalState()
     const [serverRunning, setServerRunning] = useState(false)
     const [host, setHost] = useState('127.0.0.1')
-    const [port, setPort] = useState('8000')
+    const [port, setPort] = useState('8080')
     const [errorMsg, setErrorMsg] = useState('')
     const [loading, setLoading] = useState(false)
     const [uptime, setUptime] = useState<number | null>(null)

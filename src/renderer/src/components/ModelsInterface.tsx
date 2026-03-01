@@ -33,7 +33,7 @@ export function ModelsInterface() {
     useEffect(() => {
         const interval = setInterval(() => {
             fetchModels(true)
-        }, 2000)
+        }, 5000)
         return () => clearInterval(interval)
     }, [])
 
@@ -562,7 +562,7 @@ export function ModelsInterface() {
                                 )}
 
                                 {foundModels.length > 0 && (
-                                    <div className="mt-6 border border-white/10 rounded-lg overflow-hidden bg-black/40 max-h-48 overflow-y-auto custom-scrollbar">
+                                    <div className="mt-6 border border-white/10 rounded-lg overflow-hidden bg-black/40 max-h-48 overflow-y-auto">
                                         <div className="bg-white/5 px-3 py-2 text-[10px] font-bold uppercase tracking-wide text-gray-400 border-b border-white/5 flex justify-between">
                                             <span>Found Models ({foundModels.length})</span>
                                             <span>Select</span>

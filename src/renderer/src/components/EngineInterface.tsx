@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { apiClient } from '../api/client'
+import { useGlobalState } from '../context/GlobalState'
 import { Card } from './ui/Card'
 import { Cpu, Activity, Play, Settings2, ShieldAlert, FileText, Download } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
@@ -12,6 +13,7 @@ const PRESETS = {
 };
 
 export function EngineInterface() {
+    const { setIsTraining } = useGlobalState()
     const [models, setModels] = useState<any[]>([])
     const [selectedModel, setSelectedModel] = useState('')
     const [datasetPath, setDatasetPath] = useState('train.jsonl')
@@ -81,6 +83,7 @@ export function EngineInterface() {
                 job_name: jobName
             })
             setJobStatus(data)
+            setIsTraining(true)
             pollStatus(data.job_id)
         } catch (err: any) {
             console.error(err)
@@ -106,9 +109,11 @@ export function EngineInterface() {
 
                 if (data.status === 'completed' || data.status === 'failed') {
                     clearInterval(interval)
+                    setIsTraining(false)
                 }
             } catch (e) {
                 clearInterval(interval)
+                setIsTraining(false)
             }
         }, 1000)
     }
@@ -148,14 +153,14 @@ export function EngineInterface() {
                 <div className="flex-1 flex gap-6 overflow-hidden min-h-0">
 
                     {/* Settings Sidebar */}
-                    <div className="w-[450px] flex flex-col gap-6 overflow-y-auto custom-scrollbar pr-2">
+                    <div className="w-[450px] flex flex-col gap-6 min-h-0 overflow-y-auto pr-2 pb-6">
                         <Card className="p-0 overflow-hidden bg-[#18181B] border border-white/10">
                             <div className="p-4 border-b border-white/10 bg-white/[0.02] flex items-center gap-2">
                                 <Settings2 className="w-5 h-5 text-blue-400" />
                                 <h3 className="font-bold">Job Configuration</h3>
                             </div>
 
-                            <div className="p-5 space-y-6">
+                            <div className="p-5 space-y-5">
 
                                 {/* Target Name */}
                                 <div className="space-y-2">
@@ -222,41 +227,41 @@ export function EngineInterface() {
                                         </select>
                                     </div>
 
-                                    <div className="grid grid-cols-2 gap-4">
-                                        <div className="space-y-1.5">
+                                    <div className="grid grid-cols-4 gap-3">
+                                        <div className="space-y-1">
                                             <label className="text-[10px] text-gray-500 uppercase">Epochs</label>
-                                            <input type="number" title="Epochs" value={epochs} onChange={e => { setEpochs(parseInt(e.target.value)); setPreset('custom') }} className="w-full bg-black/40 border border-white/10 rounded p-2 text-xs font-mono outline-none" />
+                                            <input type="number" title="Epochs" value={epochs} onChange={e => { setEpochs(parseInt(e.target.value)); setPreset('custom') }} className="w-full bg-black/40 border border-white/10 rounded p-1.5 text-xs font-mono outline-none" />
                                         </div>
-                                        <div className="space-y-1.5">
+                                        <div className="space-y-1">
                                             <label className="text-[10px] text-gray-500 uppercase">Batch Size</label>
-                                            <input type="number" title="Batch Size" value={batchSize} onChange={e => { setBatchSize(parseInt(e.target.value)); setPreset('custom') }} className="w-full bg-black/40 border border-white/10 rounded p-2 text-xs font-mono outline-none" />
+                                            <input type="number" title="Batch Size" value={batchSize} onChange={e => { setBatchSize(parseInt(e.target.value)); setPreset('custom') }} className="w-full bg-black/40 border border-white/10 rounded p-1.5 text-xs font-mono outline-none" />
                                         </div>
-                                        <div className="space-y-1.5">
-                                            <label className="text-[10px] text-gray-500 uppercase">Learning Rate</label>
-                                            <input type="number" title="Learning Rate" step="0.00001" value={learningRate} onChange={e => { setLearningRate(parseFloat(e.target.value)); setPreset('custom') }} className="w-full bg-black/40 border border-white/10 rounded p-2 text-xs font-mono outline-none" />
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] text-gray-500 uppercase">Learn Rate</label>
+                                            <input type="number" title="Learning Rate" step="0.00001" value={learningRate} onChange={e => { setLearningRate(parseFloat(e.target.value)); setPreset('custom') }} className="w-full bg-black/40 border border-white/10 rounded p-1.5 text-xs font-mono outline-none" />
                                         </div>
-                                        <div className="space-y-1.5">
-                                            <label className="text-[10px] text-gray-500 uppercase">Max Seq Length</label>
-                                            <input type="number" title="Max Seq Length" value={maxSeqLength} onChange={e => { setMaxSeqLength(parseInt(e.target.value)); setPreset('custom') }} className="w-full bg-black/40 border border-white/10 rounded p-2 text-xs font-mono outline-none" />
+                                        <div className="space-y-1">
+                                            <label className="text-[10px] text-gray-500 uppercase">Max Seq</label>
+                                            <input type="number" title="Max Seq Length" value={maxSeqLength} onChange={e => { setMaxSeqLength(parseInt(e.target.value)); setPreset('custom') }} className="w-full bg-black/40 border border-white/10 rounded p-1.5 text-xs font-mono outline-none" />
                                         </div>
                                     </div>
 
-                                    <div className="bg-black/20 p-3 rounded-lg border border-white/5 space-y-3">
-                                        <div className="text-[10px] font-bold text-gray-500 uppercase mb-2">LoRA Specifics</div>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <div className="space-y-1.5">
+                                    <div className="bg-black/20 p-3 rounded-lg border border-white/5 space-y-2">
+                                        <div className="text-[10px] font-bold text-gray-500 uppercase">LoRA Specifics</div>
+                                        <div className="grid grid-cols-4 gap-3">
+                                            <div className="space-y-1">
                                                 <label className="text-[10px] text-gray-500 uppercase">Rank (R)</label>
                                                 <input type="number" title="LoRA Rank" value={loraRank} onChange={e => { setLoraRank(parseInt(e.target.value)); setPreset('custom') }} className="w-full bg-black/40 border border-white/10 rounded p-1.5 text-xs font-mono outline-none" />
                                             </div>
-                                            <div className="space-y-1.5">
+                                            <div className="space-y-1">
                                                 <label className="text-[10px] text-gray-500 uppercase">Alpha</label>
                                                 <input type="number" title="LoRA Alpha" value={loraAlpha} onChange={e => { setLoraAlpha(parseInt(e.target.value)); setPreset('custom') }} className="w-full bg-black/40 border border-white/10 rounded p-1.5 text-xs font-mono outline-none" />
                                             </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-[10px] text-gray-500 uppercase">Target Layers</label>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] text-gray-500 uppercase">Layers</label>
                                                 <input type="number" title="Target Layers" value={loraLayers} onChange={e => { setLoraLayers(parseInt(e.target.value)); setPreset('custom') }} className="w-full bg-black/40 border border-white/10 rounded p-1.5 text-xs font-mono outline-none" />
                                             </div>
-                                            <div className="space-y-1.5">
+                                            <div className="space-y-1">
                                                 <label className="text-[10px] text-gray-500 uppercase">Dropout</label>
                                                 <input type="number" title="LoRA Dropout" step="0.05" value={loraDropout} onChange={e => { setLoraDropout(parseFloat(e.target.value)); setPreset('custom') }} className="w-full bg-black/40 border border-white/10 rounded p-1.5 text-xs font-mono outline-none" />
                                             </div>

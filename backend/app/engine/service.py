@@ -78,9 +78,6 @@ class MLXEngineService:
         with open(self.models_config_path, "w") as f:
             json.dump(self.models_config, f, indent=4)
             
-    def get_supported_models(self):
-        return self.models_config
-
     def _get_dir_size_str(self, path: Path):
         try:
             total_size = 0
@@ -249,10 +246,6 @@ class MLXEngineService:
         self.models_config.append(new_model)
         return new_model
 
-    def list_models(self):
-        # Kept for compatibility if used elsewhere, but internally we use models_config
-        return self.models_config
-
     async def load_active_model(self, model_id: str):
         """
         Loads a model and tokenizer into active memory, replacing any previously loaded model.
@@ -310,7 +303,7 @@ class MLXEngineService:
             logger.info(f"Model {model_id} loaded and set as active.")
         except Exception as e:
             logger.error(f"Failed to load model {model_id}: {e}")
-            raise e
+            raise
 
     def get_active_model_metadata(self) -> Dict[str, Any]:
         """Returns metadata for the currently loaded model, including numeric context_window."""
@@ -712,57 +705,6 @@ class MLXEngineService:
                 return m
         return None
 
-    async def get_model_and_tokenizer(self, model_id: str):
-        if model_id not in self.loaded_models:
-            logger.info(f"Loading model: {model_id}")
-            
-            path_to_load = model_id
-            adapter_path = None
-            
-            # Check if it's a known config first
-            config_entry = self._get_model_config_by_id(model_id)
-            
-            if config_entry:
-                if config_entry.get("is_finetuned"):
-                    # loading fine-tuned model: base + adapter
-                    path_to_load = config_entry["base_model"]
-                    adapter_path = config_entry["adapter_path"]
-                    logger.info(f"Identified fine-tuned model. Base: {path_to_load}, Adapter: {adapter_path}")
-                elif Path(config_entry["id"]).is_absolute():
-                     path_to_load = config_entry["id"]
-                else:
-                    # Standard model, check for local download
-                    sanitized_name = model_id.replace("/", "--")
-                    local_path = self.models_dir / sanitized_name
-                    if (local_path / ".completed").exists():
-                         path_to_load = str(local_path)
-            else:
-                # Fallback logic for raw IDs passed directly
-                if Path(model_id).is_absolute() and Path(model_id).exists():
-                     path_to_load = model_id
-                else:
-                    sanitized_name = model_id.replace("/", "--")
-                    local_path = self.models_dir / sanitized_name
-                    if (local_path / ".completed").exists():
-                        path_to_load = str(local_path)
-            
-            logger.info(f"Loading from: {path_to_load} (Adapter: {adapter_path})")
-
-            # This loads the model weights into memory.
-            loop = asyncio.get_running_loop()
-            
-            if adapter_path:
-                 # Load with adapter
-                 model, tokenizer = await loop.run_in_executor(
-                    None, 
-                    lambda: load(path_to_load, adapter_path=adapter_path)
-                )
-            else:
-                model, tokenizer = await loop.run_in_executor(None, load, path_to_load)
-                
-            self.loaded_models[model_id] = (model, tokenizer)
-        return self.loaded_models[model_id]
-
     def get_models_status(self):
         """
         Returns the list of supported models with their local download status.
@@ -813,8 +755,8 @@ class MLXEngineService:
             # If name looks like generic ID and it's a fine-tune, try to read metadata.json
             if entry["name"].startswith("Fine-Tune ") and "adapter_path" in m:
                 try:
-                    adapter_file = Path(m["adapter_path"])
-                    meta_path = adapter_file.parent / "metadata.json"
+                    adapter_dir = Path(m["adapter_path"])
+                    meta_path = adapter_dir / "metadata.json"
                     if meta_path.exists():
                         with open(meta_path, 'r') as f:
                             meta = json.load(f)
@@ -864,7 +806,7 @@ class MLXEngineService:
             return True
         except Exception as e:
             logger.error(f"Failed to download {model_id}: {e}")
-            raise e
+            raise
         finally:
             self.active_downloads.discard(model_id)
             
@@ -895,13 +837,14 @@ class MLXEngineService:
                 # 3. Delete files if it's a User Added Foundation Model (Absolute Path)
                 elif Path(model_id).is_absolute() and Path(model_id).exists():
                      target_path = Path(model_id)
-                     # SAFETY CHECK: Only delete if path contains 'models' to prevent system damage
-                     if "models" in str(target_path).lower() and target_path.is_dir():
+                     # SAFETY CHECK: Only delete if path is under home directory and is a real model dir
+                     home = Path.home()
+                     if target_path.is_relative_to(home) and target_path.is_dir():
                          import shutil
                          logger.info(f"Removing user model directory: {target_path}")
                          shutil.rmtree(target_path)
                      else:
-                         logger.info(f"Skipping disk deletion for safety (not in 'models' folder?): {target_path}")
+                         logger.warning(f"Skipping disk deletion for safety (not under home): {target_path}")
 
                 return True
 
@@ -919,7 +862,7 @@ class MLXEngineService:
                 return False
         except Exception as e:
             logger.error(f"Failed to delete {model_id}: {e}")
-            raise e
+            raise
 
     async def export_model(self, model_id: str, output_path: str, q_bits: int = 4):
         """Fuse adapters with base model and apply quantization."""

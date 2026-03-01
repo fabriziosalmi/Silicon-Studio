@@ -1062,8 +1062,10 @@ Return exactly this JSON structure (no other text):
                                                             </div>
                                                         </details>
                                                     ) : (
-                                                        <div className="prose prose-invert prose-sm max-w-none text-gray-200 leading-relaxed prose-p:my-2 prose-pre:bg-black/30 prose-pre:border prose-pre:border-white/5 prose-pre:rounded-lg prose-code:text-blue-300 prose-code:font-normal prose-headings:font-semibold prose-headings:text-gray-100 prose-hr:border-white/[0.06] min-w-0">
-                                                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}>
+                                                        <div className="prose prose-invert prose-sm max-w-none text-gray-200 leading-relaxed prose-p:my-2 prose-pre:bg-black/30 prose-pre:border prose-pre:border-white/5 prose-pre:rounded-lg prose-code:text-blue-300 prose-code:font-normal prose-headings:font-semibold prose-headings:text-gray-100 prose-hr:border-transparent min-w-0">
+                                                            <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]}
+                                                                components={{ hr: () => <hr className="border-white/[0.03] my-3" /> }}
+                                                            >
                                                                 {msg.content}
                                                             </ReactMarkdown>
                                                         </div>
@@ -1099,10 +1101,11 @@ Return exactly this JSON structure (no other text):
                                                     )}
 
                                                     {/* Response */}
-                                                    <div className="prose prose-invert prose-sm max-w-none text-gray-200 leading-relaxed prose-p:my-2 prose-pre:bg-transparent prose-pre:p-0 prose-pre:m-0 prose-code:text-blue-300 prose-code:font-normal prose-headings:font-semibold prose-headings:text-gray-100 prose-hr:border-white/[0.06]">
+                                                    <div className="prose prose-invert prose-sm max-w-none text-gray-200 leading-relaxed prose-p:my-2 prose-pre:bg-transparent prose-pre:p-0 prose-pre:m-0 prose-code:text-blue-300 prose-code:font-normal prose-headings:font-semibold prose-headings:text-gray-100 prose-hr:border-transparent">
                                                         <ReactMarkdown
                                                             remarkPlugins={[remarkGfm, remarkBreaks]}
                                                             components={{
+                                                                hr: () => <hr className="border-white/[0.03] my-3" />,
                                                                 code({ className, children }) {
                                                                     const match = /language-(\w+)/.exec(className || '');
                                                                     const codeString = String(children).replace(/\n$/, '');

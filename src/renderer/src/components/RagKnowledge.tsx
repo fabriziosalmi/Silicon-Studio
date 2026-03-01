@@ -14,10 +14,18 @@ export function RagKnowledge() {
     const [showCreateModal, setShowCreateModal] = useState(false)
     const [newCollectionName, setNewCollectionName] = useState("")
     const [ingestPath, setIngestPath] = useState("")
+    const [selectedCollectionId, setSelectedCollectionId] = useState("")
 
     useEffect(() => {
         fetchCollections()
     }, [])
+
+    // Auto-select first collection when list changes
+    useEffect(() => {
+        if (collections.length > 0 && !selectedCollectionId) {
+            setSelectedCollectionId(collections[0].id)
+        }
+    }, [collections])
 
     const fetchCollections = async () => {
         try {
@@ -61,8 +69,9 @@ export function RagKnowledge() {
         }
         setUploading(true);
         try {
+            const targetId = selectedCollectionId || collections[0].id;
             const files = ingestPath.split(',').map((f: string) => f.trim()).filter(Boolean);
-            await apiClient.rag.ingest(collections[0].id, files, chunkSize, chunkOverlap)
+            await apiClient.rag.ingest(targetId, files, chunkSize, chunkOverlap)
             fetchCollections()
             alert("Ingestion complete!")
             setIngestPath('')
@@ -182,6 +191,16 @@ export function RagKnowledge() {
                             <p className="text-[13px] text-gray-500 max-w-md mx-auto mb-6 leading-relaxed font-medium">
                                 Enter file paths (comma-separated) for PDF, TXT, MD, or DOCX files. Silicon Studio uses MLX-accelerated embeddings for maximum local speed.
                             </p>
+
+                            <select
+                                title="Target Collection"
+                                value={selectedCollectionId}
+                                onChange={(e) => setSelectedCollectionId(e.target.value)}
+                                className="w-full max-w-md bg-black/40 border border-white/10 rounded-lg px-4 py-2.5 text-sm text-white outline-none focus:border-blue-500 appearance-none mb-4"
+                            >
+                                {collections.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                {collections.length === 0 && <option value="">No collections</option>}
+                            </select>
 
                             <input
                                 type="text"
