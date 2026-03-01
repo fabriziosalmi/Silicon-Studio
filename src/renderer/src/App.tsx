@@ -308,23 +308,28 @@ function App() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto no-drag relative">
-
-          <div className="w-full h-full p-4 md:p-8 overflow-x-hidden">
-            {activeTab === 'studio' && <DataPreparation />}
-            {activeTab === 'models' && <ModelsInterface />}
-            {activeTab === 'engine' && <EngineInterface />}
-            {activeTab === 'evaluations' && <Evaluations />}
-            {activeTab === 'rag' && <RagKnowledge />}
-            {activeTab === 'agents' && <AgentWorkflows />}
-            {activeTab === 'deployment' && <Deployment />}
-            {activeTab === 'chat' && <ChatInterface />}
-            {activeTab === 'workspace' && <Workspace />}
-            {activeTab === 'export' && <ModelExport />}
-            {activeTab === 'settings' && <Settings />}
-            {activeTab === 'terminal' && <AgentTerminal />}
+        {activeTab === 'terminal' ? (
+          /* Terminal: full-bleed, no padding, no outer scroll — terminal manages its own layout */
+          <div className="flex-1 overflow-hidden no-drag relative">
+            <AgentTerminal />
           </div>
-        </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto no-drag relative">
+            <div className="w-full h-full p-4 md:p-8 overflow-x-hidden">
+              {activeTab === 'studio' && <DataPreparation />}
+              {activeTab === 'models' && <ModelsInterface />}
+              {activeTab === 'engine' && <EngineInterface />}
+              {activeTab === 'evaluations' && <Evaluations />}
+              {activeTab === 'rag' && <RagKnowledge />}
+              {activeTab === 'agents' && <AgentWorkflows />}
+              {activeTab === 'deployment' && <Deployment />}
+              {activeTab === 'chat' && <ChatInterface />}
+              {activeTab === 'workspace' && <Workspace />}
+              {activeTab === 'export' && <ModelExport />}
+              {activeTab === 'settings' && <Settings />}
+            </div>
+          </div>
+        )}
 
       </div>
     </div>
