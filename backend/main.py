@@ -40,6 +40,8 @@ try:
     logger.info("Imported search router")
     from app.api.mcp import router as mcp_router
     logger.info("Imported mcp router")
+    from app.api.indexer import router as indexer_router
+    logger.info("Imported indexer router")
 
 except Exception as e:
     logger.critical(f"Import error: {e}", exc_info=True)
@@ -75,6 +77,7 @@ app.include_router(sandbox_router, prefix="/api/sandbox", tags=["sandbox"])
 app.include_router(notes_router, prefix="/api/notes", tags=["notes"])
 app.include_router(search_router, prefix="/api/search", tags=["search"])
 app.include_router(mcp_router, prefix="/api/mcp", tags=["mcp"])
+app.include_router(indexer_router, prefix="/api/indexer", tags=["indexer"])
 
 
 @app.get("/health")

@@ -173,6 +173,22 @@ export interface ChatMessage {
     content: string
 }
 
+export interface IndexerSource {
+    id: string
+    url: string
+    label: string
+    added: number
+    enabled: boolean
+}
+
+export interface IndexerStatus {
+    running: boolean
+    last_run: number | null
+    collection_id: string | null
+    total_sources: number
+    enabled_sources: number
+}
+
 // --- Utilities ---
 
 /** Strip path prefixes like "Local / Models / " from model display names */
@@ -600,6 +616,61 @@ export const apiClient = {
                 body: JSON.stringify({ query, max_pages: maxPages })
             });
             if (!res.ok) return { results: [], queries_used: [], pages_fetched: 0 };
+            return res.json();
+        },
+    },
+    indexer: {
+        getSources: async (): Promise<{ sources: IndexerSource[] }> => {
+            const res = await fetch(`${API_BASE}/api/indexer/sources`);
+            if (!res.ok) throw new Error('Failed to fetch indexer sources');
+            return res.json();
+        },
+        addSource: async (url: string, label?: string): Promise<IndexerSource> => {
+            const res = await fetch(`${API_BASE}/api/indexer/sources`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ url, label })
+            });
+            if (!res.ok) throw new Error('Failed to add indexer source');
+            return res.json();
+        },
+        removeSource: async (sourceId: string): Promise<{ ok: boolean }> => {
+            const res = await fetch(`${API_BASE}/api/indexer/sources/${sourceId}`, {
+                method: 'DELETE'
+            });
+            if (!res.ok) throw new Error('Failed to remove indexer source');
+            return res.json();
+        },
+        toggleSource: async (sourceId: string, enabled: boolean): Promise<{ ok: boolean }> => {
+            const res = await fetch(`${API_BASE}/api/indexer/sources/${sourceId}/toggle`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled })
+            });
+            if (!res.ok) throw new Error('Failed to toggle indexer source');
+            return res.json();
+        },
+        crawl: async (): Promise<{ status: string; indexed: number; fetched?: number }> => {
+            const res = await fetch(`${API_BASE}/api/indexer/crawl`, { method: 'POST' });
+            if (!res.ok) throw new Error('Crawl failed');
+            return res.json();
+        },
+        getStatus: async (): Promise<IndexerStatus> => {
+            const res = await fetch(`${API_BASE}/api/indexer/status`);
+            if (!res.ok) throw new Error('Failed to fetch indexer status');
+            return res.json();
+        },
+        start: async (intervalMinutes?: number): Promise<{ status: string }> => {
+            const url = intervalMinutes
+                ? `${API_BASE}/api/indexer/start?interval_minutes=${intervalMinutes}`
+                : `${API_BASE}/api/indexer/start`;
+            const res = await fetch(url, { method: 'POST' });
+            if (!res.ok) throw new Error('Failed to start indexer');
+            return res.json();
+        },
+        stop: async (): Promise<{ status: string }> => {
+            const res = await fetch(`${API_BASE}/api/indexer/stop`, { method: 'POST' });
+            if (!res.ok) throw new Error('Failed to stop indexer');
             return res.json();
         },
     },
