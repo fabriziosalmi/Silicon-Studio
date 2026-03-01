@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { apiClient, cleanModelName } from '../api/client'
 import type { SandboxResult, SyntaxCheckResult, SelfAssessment, ConversationMemory } from '../api/client'
 import { PageHeader } from './ui/PageHeader'
-import { Settings2, SlidersHorizontal, Cpu, Copy, Check, ChevronRight, ChevronLeft, Square, ArrowUp, Wand2, Shield, Zap, FileText, TestTube2, Expand, Shrink, Languages, Briefcase, MessageCircle, GraduationCap, Scale, Eye, EyeOff, User, Baby, FlaskConical, Feather, Plus, Download, GitFork, Play, Loader2, CircleCheck, CircleX, ShieldCheck, Brain, Globe, RefreshCcw, Database, Bot } from 'lucide-react'
+import { Settings2, SlidersHorizontal, Cpu, Copy, Check, ChevronRight, ChevronLeft, Square, ArrowUp, Wand2, Shield, Zap, FileText, TestTube2, Expand, Shrink, Languages, Briefcase, MessageCircle, GraduationCap, Scale, Eye, EyeOff, User, Baby, FlaskConical, Feather, Plus, Download, GitFork, Play, Loader2, CircleCheck, CircleX, ShieldCheck, Brain, Globe, RefreshCcw, Database, Bot, Search, X } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -108,6 +108,49 @@ export function ChatInterface() {
     const [showMemoryMap, setShowMemoryMap] = useState(false)
     const [memoryBuilding, setMemoryBuilding] = useState(false)
     const memoryBuildingRef = useRef(false)
+
+    // In-chat search
+    const [showSearch, setShowSearch] = useState(false)
+    const [searchQuery, setSearchQuery] = useState('')
+    const [searchMatchIndex, setSearchMatchIndex] = useState(0)
+    const searchInputRef = useRef<HTMLInputElement>(null)
+
+    // Compute search matches: [messageIndex, ...] of messages containing query
+    const searchMatches = searchQuery.trim()
+        ? messages.reduce<number[]>((acc, msg, i) => {
+            if (msg.content.toLowerCase().includes(searchQuery.toLowerCase())) acc.push(i)
+            return acc
+        }, [])
+        : []
+
+    const toggleSearch = () => {
+        setShowSearch(prev => {
+            if (!prev) setTimeout(() => searchInputRef.current?.focus(), 50)
+            else { setSearchQuery(''); setSearchMatchIndex(0) }
+            return !prev
+        })
+    }
+
+    // Ctrl+F to open search
+    useEffect(() => {
+        const handler = (e: KeyboardEvent) => {
+            if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+                e.preventDefault()
+                if (!showSearch) toggleSearch()
+                else searchInputRef.current?.focus()
+            }
+        }
+        document.addEventListener('keydown', handler)
+        return () => document.removeEventListener('keydown', handler)
+    }, [showSearch])
+
+    // Auto-scroll to first match when search query changes
+    useEffect(() => {
+        if (searchMatches.length > 0) {
+            setSearchMatchIndex(0)
+            document.getElementById(`msg-${searchMatches[0]}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+    }, [searchQuery]) // eslint-disable-line react-hooks/exhaustive-deps
 
     // Keep ref in sync for use in async callbacks
     useEffect(() => { activeConversationIdRef.current = activeConversationId }, [activeConversationId])
@@ -961,6 +1004,14 @@ Return exactly this JSON structure (no other text):
                             </div>
                         </div>
                     )}
+                    <button
+                        onClick={toggleSearch}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showSearch ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                        title="Search in conversation (Ctrl+F)"
+                    >
+                        <Search className="w-3.5 h-3.5" />
+                        Search
+                    </button>
                     {settings.memoryMapEnabled && (
                         <button
                             type="button"
@@ -984,6 +1035,40 @@ Return exactly this JSON structure (no other text):
             <div className="flex-1 flex gap-4 overflow-hidden min-h-0 pr-4">
                 {/* Main Chat Area */}
                 <div className="flex-1 flex flex-col overflow-hidden relative">
+
+                    {/* Search Bar */}
+                    {showSearch && (
+                        <div className="flex items-center gap-2 px-4 py-2 border-b border-white/5 bg-black/30 shrink-0">
+                            <Search size={14} className="text-gray-500 shrink-0" />
+                            <input
+                                ref={searchInputRef}
+                                value={searchQuery}
+                                onChange={(e) => { setSearchQuery(e.target.value); setSearchMatchIndex(0); }}
+                                onKeyDown={(e) => {
+                                    if (e.key === 'Enter' && searchMatches.length > 0) {
+                                        const next = e.shiftKey
+                                            ? (searchMatchIndex - 1 + searchMatches.length) % searchMatches.length
+                                            : (searchMatchIndex + 1) % searchMatches.length;
+                                        setSearchMatchIndex(next);
+                                        document.getElementById(`msg-${searchMatches[next]}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                    }
+                                    if (e.key === 'Escape') toggleSearch();
+                                }}
+                                placeholder="Search in conversation..."
+                                className="flex-1 bg-transparent text-sm text-white placeholder-gray-600 outline-none"
+                            />
+                            {searchQuery && (
+                                <span className="text-[10px] text-gray-500 tabular-nums shrink-0">
+                                    {searchMatches.length > 0
+                                        ? `${searchMatchIndex + 1}/${searchMatches.length}`
+                                        : 'No results'}
+                                </span>
+                            )}
+                            <button onClick={toggleSearch} className="text-gray-500 hover:text-white transition-colors shrink-0" title="Close search">
+                                <X size={14} />
+                            </button>
+                        </div>
+                    )}
 
                     {/* Messages */}
                     <div className="flex-1 overflow-y-auto">
@@ -1044,8 +1129,11 @@ Return exactly this JSON structure (no other text):
                                         const isLastMsg = idx === messages.length - 1 || (idx === messages.length - 2 && messages[messages.length - 1]?.role === 'assistant');
                                         const showSpinner = isLastMsg && isGenerating;
 
+                                        const isSearchHit = searchQuery && searchMatches.includes(idx);
+                                        const isActiveHit = isSearchHit && searchMatches[searchMatchIndex] === idx;
+
                                         return (
-                                            <div key={idx} className="mb-6">
+                                            <div key={idx} id={`msg-${idx}`} className={`mb-6 rounded-lg transition-colors ${isActiveHit ? 'bg-yellow-500/10 ring-1 ring-yellow-500/30' : isSearchHit ? 'bg-white/[0.02]' : ''}`}>
                                                 <div className="flex items-start gap-3">
                                                     <div className="w-6 h-6 rounded-md bg-white/10 flex items-center justify-center shrink-0 mt-0.5">
                                                         <User size={14} className="text-gray-400" />
@@ -1085,8 +1173,11 @@ Return exactly this JSON structure (no other text):
                                         )
                                     }
 
+                                    const isSearchHitAst = searchQuery && searchMatches.includes(idx);
+                                    const isActiveHitAst = isSearchHitAst && searchMatches[searchMatchIndex] === idx;
+
                                     return (
-                                        <div key={idx} className="mb-6 group">
+                                        <div key={idx} id={`msg-${idx}`} className={`mb-6 group rounded-lg transition-colors ${isActiveHitAst ? 'bg-yellow-500/10 ring-1 ring-yellow-500/30' : isSearchHitAst ? 'bg-white/[0.02]' : ''}`}>
                                             <div className="flex items-start gap-3">
                                                 <div className="w-6 h-6 rounded-md bg-blue-500/10 flex items-center justify-center shrink-0 mt-1">
                                                     <Bot size={14} className="text-blue-400" />
