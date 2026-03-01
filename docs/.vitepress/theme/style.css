@@ -1,0 +1,342 @@
+/* ============================================================
+   SiliconDev — Apple Aesthetic Theme for VitePress
+   ============================================================ */
+
+/* ----------------------------------------------------------
+   1. FONT STACK
+   ---------------------------------------------------------- */
+
+:root {
+    --vp-font-family-base: -apple-system, BlinkMacSystemFont, "SF Pro Display",
+        "SF Pro Text", "Helvetica Neue", "Arial", sans-serif;
+    --vp-font-family-mono: "SF Mono", SFMono-Regular, ui-monospace, "DejaVu Sans Mono",
+        Menlo, Consolas, monospace;
+}
+
+/* ----------------------------------------------------------
+   2. COLOR SYSTEM — Light Mode
+   ---------------------------------------------------------- */
+
+:root {
+    /* Brand */
+    --vp-c-brand-1: #0071e3;
+    --vp-c-brand-2: #0077ed;
+    --vp-c-brand-3: #0071e3;
+    --vp-c-brand-soft: rgba(0, 113, 227, 0.12);
+
+    /* Backgrounds */
+    --vp-c-bg: #ffffff;
+    --vp-c-bg-alt: #f5f5f7;
+    --vp-c-bg-elv: #ffffff;
+    --vp-c-bg-soft: #f5f5f7;
+
+    /* Text */
+    --vp-c-text-1: #1d1d1f;
+    --vp-c-text-2: #86868b;
+    --vp-c-text-3: #86868b;
+
+    /* Borders — deliberately muted */
+    --vp-c-border: rgba(0, 0, 0, 0.08);
+    --vp-c-divider: rgba(0, 0, 0, 0.06);
+    --vp-c-gutter: rgba(0, 0, 0, 0.04);
+
+    /* Buttons */
+    --vp-button-brand-border: transparent;
+    --vp-button-brand-text: #ffffff;
+    --vp-button-brand-bg: #0071e3;
+    --vp-button-brand-hover-border: transparent;
+    --vp-button-brand-hover-text: #ffffff;
+    --vp-button-brand-hover-bg: #0077ed;
+    --vp-button-brand-active-border: transparent;
+    --vp-button-brand-active-text: #ffffff;
+    --vp-button-brand-active-bg: #006edb;
+
+    --vp-button-alt-border: rgba(0, 0, 0, 0.12);
+    --vp-button-alt-text: #1d1d1f;
+    --vp-button-alt-bg: rgba(0, 0, 0, 0.04);
+    --vp-button-alt-hover-border: rgba(0, 0, 0, 0.16);
+    --vp-button-alt-hover-text: #1d1d1f;
+    --vp-button-alt-hover-bg: rgba(0, 0, 0, 0.06);
+
+    /* Home hero name gradient */
+    --vp-home-hero-name-color: transparent;
+    --vp-home-hero-name-background: linear-gradient(135deg, #1d1d1f 0%, #424245 100%);
+
+    /* Home hero image glow */
+    --vp-home-hero-image-background-image: linear-gradient(135deg,
+            rgba(0, 113, 227, 0.18) 0%,
+            rgba(0, 113, 227, 0.06) 100%);
+    --vp-home-hero-image-filter: blur(56px);
+}
+
+/* ----------------------------------------------------------
+   3. COLOR SYSTEM — Dark Mode
+   ---------------------------------------------------------- */
+
+.dark {
+    --vp-c-brand-1: #2997ff;
+    --vp-c-brand-2: #2997ff;
+    --vp-c-brand-3: #2997ff;
+    --vp-c-brand-soft: rgba(41, 151, 255, 0.14);
+
+    --vp-c-bg: #000000;
+    --vp-c-bg-alt: #1d1d1f;
+    --vp-c-bg-elv: #1d1d1f;
+    --vp-c-bg-soft: #1d1d1f;
+
+    --vp-c-text-1: #f5f5f7;
+    --vp-c-text-2: #86868b;
+    --vp-c-text-3: #6e6e73;
+
+    --vp-c-border: rgba(255, 255, 255, 0.08);
+    --vp-c-divider: rgba(255, 255, 255, 0.06);
+    --vp-c-gutter: rgba(255, 255, 255, 0.04);
+
+    --vp-button-brand-border: transparent;
+    --vp-button-brand-text: #ffffff;
+    --vp-button-brand-bg: #2997ff;
+    --vp-button-brand-hover-border: transparent;
+    --vp-button-brand-hover-text: #ffffff;
+    --vp-button-brand-hover-bg: #40a9ff;
+    --vp-button-brand-active-border: transparent;
+    --vp-button-brand-active-text: #ffffff;
+    --vp-button-brand-active-bg: #1a8aef;
+
+    --vp-button-alt-border: rgba(255, 255, 255, 0.12);
+    --vp-button-alt-text: #f5f5f7;
+    --vp-button-alt-bg: rgba(255, 255, 255, 0.06);
+    --vp-button-alt-hover-border: rgba(255, 255, 255, 0.18);
+    --vp-button-alt-hover-text: #f5f5f7;
+    --vp-button-alt-hover-bg: rgba(255, 255, 255, 0.10);
+
+    --vp-home-hero-name-color: transparent;
+    --vp-home-hero-name-background: linear-gradient(135deg, #f5f5f7 0%, #a1a1a6 100%);
+
+    --vp-home-hero-image-background-image: linear-gradient(135deg,
+            rgba(41, 151, 255, 0.22) 0%,
+            rgba(41, 151, 255, 0.06) 100%);
+    --vp-home-hero-image-filter: blur(56px);
+}
+
+/* ----------------------------------------------------------
+   4. GLOBAL TYPOGRAPHY
+   ---------------------------------------------------------- */
+
+h1,
+h2,
+.VPHero .name,
+.VPHero .text {
+    letter-spacing: -0.04em;
+    font-weight: 700;
+}
+
+h3,
+h4 {
+    letter-spacing: -0.02em;
+    font-weight: 600;
+}
+
+.VPHero .tagline {
+    letter-spacing: -0.01em;
+    font-weight: 400;
+    color: var(--vp-c-text-2);
+    max-width: 520px;
+    line-height: 1.5;
+}
+
+/* Make the main hero title larger */
+.VPHero .name {
+    font-size: 56px;
+    line-height: 1.05;
+}
+
+.VPHero .text {
+    font-size: 40px;
+    line-height: 1.1;
+}
+
+@media (max-width: 768px) {
+    .VPHero .name {
+        font-size: 36px;
+    }
+
+    .VPHero .text {
+        font-size: 28px;
+    }
+}
+
+/* ----------------------------------------------------------
+   5. NAVBAR — Glassmorphism
+   ---------------------------------------------------------- */
+
+.VPNav {
+    background: rgba(255, 255, 255, 0.72) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(180%);
+    backdrop-filter: blur(20px) saturate(180%);
+    border-bottom: 0.5px solid rgba(0, 0, 0, 0.06) !important;
+}
+
+.dark .VPNav {
+    background: rgba(29, 29, 31, 0.72) !important;
+    border-bottom: 0.5px solid rgba(255, 255, 255, 0.06) !important;
+}
+
+/* Remove the default VitePress nav divider line */
+.VPNavBar .divider,
+.VPNavBar .divider-line {
+    display: none;
+}
+
+/* ----------------------------------------------------------
+   6. BUTTONS — Pill Shape
+   ---------------------------------------------------------- */
+
+.VPButton {
+    border-radius: 9999px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    padding: 10px 28px !important;
+    letter-spacing: -0.01em;
+    transition: all 0.2s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.VPButton:hover {
+    transform: scale(1.02);
+}
+
+.VPButton:active {
+    transform: scale(0.98);
+}
+
+/* ----------------------------------------------------------
+   7. FEATURE CARDS — Bento Box Grid
+   ---------------------------------------------------------- */
+
+.VPFeature {
+    border-radius: 20px !important;
+    border: none !important;
+    background: var(--vp-c-bg-soft) !important;
+    padding: 28px 24px !important;
+    transition: transform 0.3s cubic-bezier(0.25, 0.1, 0.25, 1),
+        box-shadow 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.VPFeature:hover {
+    transform: scale(1.01);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+}
+
+.dark .VPFeature:hover {
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.30);
+}
+
+/* Feature card titles */
+.VPFeature .title {
+    font-size: 17px !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.02em;
+    color: var(--vp-c-text-1);
+}
+
+/* Feature card body text */
+.VPFeature .details {
+    font-size: 14px !important;
+    line-height: 1.55;
+    color: var(--vp-c-text-2);
+}
+
+/* Remove border from the features wrapper */
+.VPFeatures {
+    border-top: none !important;
+}
+
+/* ----------------------------------------------------------
+   8. SIDEBAR REFINEMENTS
+   ---------------------------------------------------------- */
+
+.VPSidebar {
+    background: var(--vp-c-bg) !important;
+}
+
+.VPSidebarItem .text {
+    font-size: 14px;
+    font-weight: 500;
+    letter-spacing: -0.01em;
+}
+
+.VPSidebarItem.is-active>.item>.link>.text {
+    color: var(--vp-c-brand-1) !important;
+    font-weight: 600;
+}
+
+/* ----------------------------------------------------------
+   9. CONTENT AREA
+   ---------------------------------------------------------- */
+
+.vp-doc a {
+    color: var(--vp-c-brand-1);
+    text-decoration: none;
+    font-weight: 500;
+}
+
+.vp-doc a:hover {
+    text-decoration: underline;
+}
+
+/* Code blocks: slightly more Apple feel */
+.vp-doc div[class*="language-"] {
+    border-radius: 12px;
+    border: none;
+}
+
+/* ----------------------------------------------------------
+   10. FOOTER
+   ---------------------------------------------------------- */
+
+.VPFooter {
+    border-top: 0.5px solid var(--vp-c-divider) !important;
+}
+
+.VPFooter .message,
+.VPFooter .copyright {
+    font-size: 12px;
+    color: var(--vp-c-text-2);
+}
+
+/* ----------------------------------------------------------
+   11. SEARCH DIALOG
+   ---------------------------------------------------------- */
+
+.VPLocalSearchBox .shell {
+    border-radius: 16px;
+}
+
+/* ----------------------------------------------------------
+   12. SCROLLBAR (WebKit)
+   ---------------------------------------------------------- */
+
+::-webkit-scrollbar {
+    width: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 4px;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+/* ----------------------------------------------------------
+   13. GLOBAL TRANSITIONS
+   ---------------------------------------------------------- */
+
+* {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+}
