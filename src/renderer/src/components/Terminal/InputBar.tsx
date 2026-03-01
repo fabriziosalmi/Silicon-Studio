@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react'
-import { Send, Square } from 'lucide-react'
+import { ArrowUp, Square } from 'lucide-react'
 
 interface InputBarProps {
   onSubmit: (prompt: string) => void
@@ -34,35 +34,47 @@ export function InputBar({ onSubmit, onStop, isRunning, disabled }: InputBarProp
     }
   }
 
+  const canSend = value.trim().length > 0 && !disabled && !isRunning
+
   return (
-    <div className="border-t border-white/5 bg-white/[0.02] px-4 py-3">
-      <div className="flex items-end gap-2">
+    <div className="px-4 py-3 bg-black/20">
+      <div className="flex items-end gap-2 bg-white/[0.04] border border-white/[0.06] rounded-xl px-3 py-2 focus-within:border-blue-500/30 transition-colors">
+        {/* Prompt caret */}
+        <span className="text-blue-400/60 text-sm font-mono shrink-0 pb-0.5 select-none">&gt;</span>
+
         <textarea
           ref={textareaRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
-          placeholder={disabled ? 'Load a model first...' : 'Ask NanoCore to do something...'}
+          placeholder={disabled ? 'Load a model first...' : 'Ask NanoCore...'}
           disabled={disabled || isRunning}
           rows={1}
-          className="flex-1 resize-none bg-white/5 border border-white/10 rounded-lg px-3 py-2 text-sm text-white placeholder-gray-500 focus:outline-none focus:border-blue-500/50 disabled:opacity-50 select-text"
+          className="flex-1 resize-none bg-transparent text-sm text-white placeholder-gray-600 focus:outline-none disabled:opacity-40 select-text font-mono leading-relaxed"
         />
+
         {isRunning ? (
           <button
+            type="button"
             onClick={onStop}
-            className="shrink-0 px-3 py-2 bg-red-600/80 hover:bg-red-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5"
+            className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
+            title="Stop generation"
           >
-            <Square size={14} />
-            Stop
+            <Square size={12} />
           </button>
         ) : (
           <button
+            type="button"
             onClick={handleSubmit}
-            disabled={!value.trim() || disabled}
-            className="shrink-0 px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-30 disabled:hover:bg-blue-600 text-white rounded-lg text-sm font-medium transition-colors flex items-center gap-1.5"
+            disabled={!canSend}
+            className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-150 ${
+              canSend
+                ? 'bg-blue-500 text-white hover:bg-blue-400'
+                : 'bg-white/5 text-gray-600'
+            }`}
+            title="Send (Enter)"
           >
-            <Send size={14} />
-            Send
+            <ArrowUp size={14} strokeWidth={2.5} />
           </button>
         )}
       </div>

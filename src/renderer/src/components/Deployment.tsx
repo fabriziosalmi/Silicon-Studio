@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { Server, Copy, Check, Globe, ChevronRight, Terminal } from 'lucide-react'
+import { ToggleSwitch } from './ui/ToggleSwitch'
 import { useGlobalState } from '../context/GlobalState'
 import { apiClient, cleanModelName } from '../api/client'
 
@@ -297,12 +298,7 @@ print(response.choices[0].message.content)`
                         </div>
                         <div className="flex items-center gap-3">
                             <label className="flex items-center gap-1.5 text-[10px] text-gray-600 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={autoScroll}
-                                    onChange={(e) => setAutoScroll(e.target.checked)}
-                                    className="accent-white/50"
-                                />
+                                <ToggleSwitch enabled={autoScroll} onChange={setAutoScroll} size="sm" />
                                 Auto-scroll
                             </label>
                             {logs.length > 0 && (

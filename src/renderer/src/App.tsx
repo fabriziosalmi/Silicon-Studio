@@ -339,9 +339,9 @@ function SidebarItem({ label, active, onClick, icon, collapsed, suffix }: { labe
       onClick={onClick}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onClick(); }}
       title={collapsed ? label : undefined}
-      className={`w-full flex items-center ${collapsed ? 'justify-center px-0 py-2' : 'px-3 py-2'} rounded-lg text-[13px] font-medium transition-colors cursor-pointer ${active
-        ? 'bg-white/10 text-white'
-        : 'text-gray-400 hover:bg-white/5 hover:text-white'
+      className={`w-full flex items-center ${collapsed ? 'justify-center px-0 py-2 rounded-lg' : 'px-3 py-2 rounded-r-md'} text-[13px] font-medium transition-all duration-150 cursor-pointer focus:outline-none focus:ring-1 focus:ring-blue-500/50 ${active
+        ? `bg-[#1e1e1e] text-gray-100 ${collapsed ? '' : 'border-l-[3px] border-blue-500'}`
+        : `text-gray-400 hover:bg-white/5 hover:text-white ${collapsed ? '' : 'border-l-[3px] border-transparent'}`
         }`}
     >
       <span className={`flex items-center justify-center w-5 h-5 shrink-0 ${active ? 'text-blue-400' : 'opacity-70'}`}>{icon}</span>

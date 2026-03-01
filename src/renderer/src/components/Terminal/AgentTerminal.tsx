@@ -1,10 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { PanelRightOpen, PanelRightClose, Trash2 } from 'lucide-react'
+import { PanelRightOpen, PanelRightClose, Trash2, TerminalSquare } from 'lucide-react'
 import { useGlobalState } from '../../context/GlobalState'
 import { apiClient } from '../../api/client'
 import { MessageFeed } from './MessageFeed'
 import { InputBar } from './InputBar'
 import { TelemetrySidebar } from './TelemetrySidebar'
+import { EmptyState } from '../ui/EmptyState'
 import type { FeedItem, TelemetryData, SSEEvent } from './types'
 
 const EMPTY_TELEMETRY: TelemetryData = {
@@ -301,40 +302,44 @@ export function AgentTerminal() {
   if (!activeModel) {
     return (
       <div className="h-full flex items-center justify-center">
-        <div className="text-center space-y-3">
-          <div className="w-12 h-12 mx-auto rounded-xl bg-white/5 flex items-center justify-center">
-            <PanelRightOpen size={24} className="text-gray-600" />
-          </div>
-          <p className="text-sm text-gray-400">Load a model from the Models page to use the terminal.</p>
-        </div>
+        <EmptyState
+          icon={<TerminalSquare size={24} />}
+          title="No model loaded"
+          description="Load a model from the Models page to use the terminal."
+        />
       </div>
     )
   }
 
   return (
     <div className="h-full flex flex-col">
-      {/* Top bar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-white/5 shrink-0">
-        <div className="flex items-center gap-2">
-          <span className="text-sm font-medium text-white">NanoCore Terminal</span>
-          <span className="text-[10px] text-gray-500 bg-white/5 px-1.5 py-0.5 rounded font-mono">{activeModel.name}</span>
+      {/* Terminal header — bash style */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-white/[0.04] bg-black/30 shrink-0">
+        <div className="flex items-center gap-2 font-mono text-xs">
+          <span className="text-green-500">nanocore</span>
+          <span className="text-gray-600">@</span>
+          <span className="text-blue-400">{activeModel.name}</span>
+          <span className="text-gray-600">~</span>
+          {isRunning && <span className="inline-block w-1.5 h-3 bg-green-400 animate-pulse rounded-sm" />}
         </div>
         <div className="flex items-center gap-1">
           {feedItems.length > 0 && !isRunning && (
             <button
+              type="button"
               onClick={clearHistory}
-              className="p-1.5 text-gray-500 hover:text-red-400 hover:bg-white/10 rounded-lg transition-colors"
+              className="p-1.5 text-gray-600 hover:text-red-400 hover:bg-white/5 rounded-lg transition-colors"
               title="Clear history"
             >
-              <Trash2 size={14} />
+              <Trash2 size={13} />
             </button>
           )}
           <button
+            type="button"
             onClick={() => setSidebarOpen(!sidebarOpen)}
-            className="p-1.5 text-gray-500 hover:text-white hover:bg-white/10 rounded-lg transition-colors"
+            className="p-1.5 text-gray-600 hover:text-white hover:bg-white/5 rounded-lg transition-colors"
             title={sidebarOpen ? 'Hide telemetry' : 'Show telemetry'}
           >
-            {sidebarOpen ? <PanelRightClose size={16} /> : <PanelRightOpen size={16} />}
+            {sidebarOpen ? <PanelRightClose size={14} /> : <PanelRightOpen size={14} />}
           </button>
         </div>
       </div>

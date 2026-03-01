@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { apiClient, cleanModelName } from '../api/client'
 import type { SandboxResult, SyntaxCheckResult, SelfAssessment, ConversationMemory } from '../api/client'
 import { PageHeader } from './ui/PageHeader'
-import { Settings2, Cpu, Copy, Check, ChevronRight, ChevronLeft, Square, ArrowUp, Wand2, Shield, Zap, FileText, TestTube2, Expand, Shrink, Languages, Briefcase, MessageCircle, GraduationCap, Scale, Eye, EyeOff, User, Baby, FlaskConical, Feather, Plus, Download, GitFork, Play, Loader2, CircleCheck, CircleX, ShieldCheck, Brain, Globe, RefreshCcw, Database, Bot, Search, X, ChevronUp, ChevronDown, ChevronsRight } from 'lucide-react'
+import { ToggleSwitch } from './ui/ToggleSwitch'
+import { Settings2, Cpu, Copy, Check, ChevronRight, ChevronLeft, Square, ArrowUp, Wand2, Shield, Zap, FileText, TestTube2, Expand, Shrink, Languages, Briefcase, MessageCircle, GraduationCap, Scale, Eye, User, Baby, FlaskConical, Feather, Plus, Download, GitFork, Play, Loader2, CircleCheck, CircleX, ShieldCheck, Brain, RefreshCcw, Database, Bot, Search, X, ChevronUp, ChevronDown, ChevronsRight } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -1590,61 +1591,21 @@ Return exactly this JSON structure (no other text):
                                         <div className="space-y-3">
                                             <div className="flex items-center justify-between">
                                                 <label className="text-xs text-gray-400">Show Prompt</label>
-                                                <button
-                                                    onClick={() => setSettings({ ...settings, showPrompt: !settings.showPrompt })}
-                                                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                                                        settings.showPrompt
-                                                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                                            : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
-                                                    }`}
-                                                >
-                                                    {settings.showPrompt ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                                                    {settings.showPrompt ? 'On' : 'Off'}
-                                                </button>
+                                                <ToggleSwitch enabled={settings.showPrompt} onChange={(v) => setSettings({ ...settings, showPrompt: v })} size="sm" />
                                             </div>
                                             <div className="flex items-center justify-between">
                                                 <label className="text-xs text-gray-400">Syntax Check</label>
-                                                <button
-                                                    onClick={() => setSettings({ ...settings, syntaxCheck: !settings.syntaxCheck })}
-                                                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                                                        settings.syntaxCheck
-                                                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                                            : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
-                                                    }`}
-                                                >
-                                                    {settings.syntaxCheck ? <CircleCheck className="w-3 h-3" /> : <CircleX className="w-3 h-3" />}
-                                                    {settings.syntaxCheck ? 'On' : 'Off'}
-                                                </button>
+                                                <ToggleSwitch enabled={settings.syntaxCheck} onChange={(v) => setSettings({ ...settings, syntaxCheck: v })} size="sm" />
                                             </div>
                                             {settings.syntaxCheck && (
                                                 <div className="flex items-center justify-between pl-3">
                                                     <label className="text-xs text-gray-500">Auto-fix</label>
-                                                    <button
-                                                        onClick={() => setSettings({ ...settings, autoFixSyntax: !settings.autoFixSyntax })}
-                                                        className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                                                            settings.autoFixSyntax
-                                                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                                                : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
-                                                        }`}
-                                                    >
-                                                        {settings.autoFixSyntax ? 'On' : 'Off'}
-                                                    </button>
+                                                    <ToggleSwitch enabled={settings.autoFixSyntax} onChange={(v) => setSettings({ ...settings, autoFixSyntax: v })} size="sm" />
                                                 </div>
                                             )}
                                             <div className="flex items-center justify-between">
                                                 <label className="text-xs text-gray-400">Memory Map</label>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setSettings({ ...settings, memoryMapEnabled: !settings.memoryMapEnabled })}
-                                                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                                                        settings.memoryMapEnabled
-                                                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                                            : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
-                                                    }`}
-                                                >
-                                                    <Brain className="w-3 h-3" />
-                                                    {settings.memoryMapEnabled ? 'On' : 'Off'}
-                                                </button>
+                                                <ToggleSwitch enabled={settings.memoryMapEnabled} onChange={(v) => setSettings({ ...settings, memoryMapEnabled: v })} size="sm" />
                                             </div>
                                             {settings.memoryMapEnabled && (
                                                 <div className="pl-3">
@@ -1659,18 +1620,7 @@ Return exactly this JSON structure (no other text):
                                             )}
                                             <div className="flex items-center justify-between">
                                                 <label className="text-xs text-gray-400">PII Redaction</label>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setSettings({ ...settings, piiRedaction: !settings.piiRedaction })}
-                                                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                                                        settings.piiRedaction
-                                                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                                            : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
-                                                    }`}
-                                                >
-                                                    <Shield className="w-3 h-3" />
-                                                    {settings.piiRedaction ? 'On' : 'Off'}
-                                                </button>
+                                                <ToggleSwitch enabled={settings.piiRedaction} onChange={(v) => setSettings({ ...settings, piiRedaction: v })} size="sm" />
                                             </div>
                                         </div>
                                     </div>
@@ -1680,22 +1630,10 @@ Return exactly this JSON structure (no other text):
                                         <div className="space-y-3">
                                             <div className="flex items-center justify-between">
                                                 <label className="text-xs text-gray-400">RAG Knowledge</label>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        const next = !settings.ragEnabled;
-                                                        setSettings({ ...settings, ragEnabled: next });
-                                                        if (next && ragCollections.length === 0) fetchRagCollections();
-                                                    }}
-                                                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                                                        settings.ragEnabled
-                                                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                                            : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
-                                                    }`}
-                                                >
-                                                    <Database className="w-3 h-3" />
-                                                    {settings.ragEnabled ? 'On' : 'Off'}
-                                                </button>
+                                                <ToggleSwitch enabled={settings.ragEnabled} onChange={(v) => {
+                                                    setSettings({ ...settings, ragEnabled: v });
+                                                    if (v && ragCollections.length === 0) fetchRagCollections();
+                                                }} size="sm" />
                                             </div>
                                             {settings.ragEnabled && (
                                                 <select
@@ -1712,18 +1650,7 @@ Return exactly this JSON structure (no other text):
                                             )}
                                             <div className="flex items-center justify-between">
                                                 <label className="text-xs text-gray-400">Web Search</label>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setSettings({ ...settings, webSearchEnabled: !settings.webSearchEnabled })}
-                                                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                                                        settings.webSearchEnabled
-                                                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                                            : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
-                                                    }`}
-                                                >
-                                                    <Globe className="w-3 h-3" />
-                                                    {settings.webSearchEnabled ? 'On' : 'Off'}
-                                                </button>
+                                                <ToggleSwitch enabled={settings.webSearchEnabled} onChange={(v) => setSettings({ ...settings, webSearchEnabled: v })} size="sm" />
                                             </div>
                                         </div>
                                     </div>

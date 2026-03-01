@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Card } from './ui/Card'
+import { ToggleSwitch } from './ui/ToggleSwitch'
 import { apiClient } from '../api/client'
 import { Settings2, MessageSquare, Brain, RotateCcw, Info, Server, Plus, Trash2, Loader2, Gauge, Globe, Play, Square, RefreshCcw } from 'lucide-react'
 import type { IndexerSource, IndexerStatus } from '../api/client'
@@ -417,12 +418,11 @@ function WebIndexerSection() {
                 <div className="space-y-2">
                     {sources.map(s => (
                         <div key={s.id} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg bg-black/20 border border-white/5 ${!s.enabled ? 'opacity-50' : ''}`}>
-                            <input
-                                type="checkbox"
-                                checked={s.enabled}
-                                onChange={(e) => handleToggle(s.id, e.target.checked)}
-                                title={`Toggle ${s.label}`}
-                                className="accent-blue-500"
+                            <ToggleSwitch
+                                enabled={s.enabled}
+                                onChange={(v) => handleToggle(s.id, v)}
+                                size="sm"
+                                label={`Toggle ${s.label}`}
                             />
                             <Globe size={14} className="text-gray-500 shrink-0" />
                             <div className="flex-1 min-w-0">
@@ -574,16 +574,14 @@ export function Settings() {
                     <div className="grid grid-cols-2 xl:grid-cols-4 gap-4">
                         <SliderField label="Repetition Penalty" value={chat.repetitionPenalty} onChange={(v) => updateChat('repetitionPenalty', v)} min={1} max={2} step={0.05} hint="Penalize repeated tokens" />
                     </div>
-                    <div className="flex items-center gap-3">
-                        <label className="flex items-center gap-2 cursor-pointer">
-                            <input
-                                type="checkbox"
-                                checked={chat.webSearchEnabled}
-                                onChange={(e) => updateChat('webSearchEnabled', e.target.checked)}
-                                className="accent-blue-500"
-                            />
-                            <span className="text-sm text-gray-300">Enable web search by default</span>
-                        </label>
+                    <div className="flex items-center justify-between">
+                        <span className="text-sm text-gray-300">Enable web search by default</span>
+                        <ToggleSwitch
+                            enabled={chat.webSearchEnabled}
+                            onChange={(v) => updateChat('webSearchEnabled', v)}
+                            size="sm"
+                            label="Enable web search by default"
+                        />
                     </div>
                 </div>
             </Card>
