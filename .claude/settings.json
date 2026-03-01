@@ -13,7 +13,8 @@
       "Bash(npx electron-builder build --mac --config.directories.app=.)",
       "Bash(.venv/bin/python -m PyInstaller spec/silicon_server.spec --clean --noconfirm --distpath dist --workpath build)",
       "Bash(/Users/fab/Documents/git/Silicon-Studio/backend/.venv/bin/python -m PyInstaller /Users/fab/Documents/git/Silicon-Studio/backend/spec/silicon_server.spec --clean --noconfirm --distpath /Users/fab/Documents/git/Silicon-Studio/backend/dist --workpath /Users/fab/Documents/git/Silicon-Studio/backend/build)",
-      "Bash(gh release upload v0.4.1 /Users/fab/Documents/git/Silicon-Studio/release/SiliconDev-0.4.1-arm64.dmg --repo fabriziosalmi/silicondev)"
+      "Bash(gh release upload v0.4.1 /Users/fab/Documents/git/Silicon-Studio/release/SiliconDev-0.4.1-arm64.dmg --repo fabriziosalmi/silicondev)",
+      "Bash(gh release upload v0.4.1 /Users/fab/Documents/git/Silicon-Studio/release/SiliconDev-0.4.1-arm64-mac.zip --repo fabriziosalmi/silicondev)"
     ]
   }
 }

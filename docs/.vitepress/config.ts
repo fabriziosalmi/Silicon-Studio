@@ -74,6 +74,7 @@ export default defineConfig({
             { text: 'Deployment', link: '/api/deployment' },
             { text: 'Sandbox', link: '/api/sandbox' },
             { text: 'Search', link: '/api/search' },
+            { text: 'Indexer', link: '/api/indexer' },
             { text: 'Monitor', link: '/api/monitor' },
           ],
         },

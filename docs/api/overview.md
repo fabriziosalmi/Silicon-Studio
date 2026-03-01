@@ -18,19 +18,21 @@ Returns `{"status": "ok"}` when the backend is running. The frontend polls this 
 
 ## Router Map
 
-| Prefix | Module | Description |
-|--------|--------|-------------|
-| `/api/monitor` | [Monitor](/api/monitor) | System stats (RAM, CPU, disk) |
-| `/api/engine` | [Engine](/api/engine) | Models, fine-tuning, chat, export |
-| `/api/rag` | [RAG](/api/rag) | Knowledge base collections and queries |
-| `/api/conversations` | [Conversations](/api/conversations) | Chat history CRUD |
-| `/api/notes` | [Notes](/api/notes) | Note storage |
-| `/api/agents` | [Agents](/api/agents) | Workflow definitions and execution |
-| `/api/preparation` | [Preparation](/api/preparation) | Data conversion and generation |
-| `/api/mcp` | [MCP](/api/mcp) | MCP server management and tool execution |
-| `/api/deployment` | [Deployment](/api/deployment) | Model server lifecycle |
-| `/api/sandbox` | [Sandbox](/api/sandbox) | Code execution |
-| `/api/search` | [Search](/api/search) | Web search |
+| Prefix               | Module                              | Description                              |
+| -------------------- | ----------------------------------- | ---------------------------------------- |
+| `/api/monitor`       | [Monitor](/api/monitor)             | System stats (RAM, CPU, disk)            |
+| `/api/engine`        | [Engine](/api/engine)               | Models, fine-tuning, chat, export        |
+| `/api/rag`           | [RAG](/api/rag)                     | Knowledge base collections and queries   |
+| `/api/conversations` | [Conversations](/api/conversations) | Chat history CRUD                        |
+| `/api/notes`         | [Notes](/api/notes)                 | Note storage                             |
+| `/api/agents`        | [Agents](/api/agents)               | Workflow definitions and execution       |
+| `/api/preparation`   | [Preparation](/api/preparation)     | Data conversion and generation           |
+| `/api/mcp`           | [MCP](/api/mcp)                     | MCP server management and tool execution |
+| `/api/deployment`    | [Deployment](/api/deployment)       | Model server lifecycle                   |
+| `/api/sandbox`       | [Sandbox](/api/sandbox)             | Code execution                           |
+| `/api/search`        | [Search](/api/search)               | Web search                               |
+| `/api/terminal`      | [Terminal](/api/terminal)           | Agent terminal and bash execution        |
+| `/api/indexer`       | [Indexer](/api/indexer)             | Background web crawler                   |
 
 ## CORS
 

@@ -128,7 +128,11 @@ Initial release. Based on [Silicon-Studio](https://github.com/rileycleavenger/Si
 
 - Markdown editor with auto-save
 - Pin, rename, delete
-- Export as .md
+- Import from .md and .txt files
+- Export as .md, .txt, or PDF
+- Legacy note auto-migration
+- AI Commands sidebar (Continue Writing, Summarize, Draft Introduction)
+- AI Transforms (To Table, Key Points, Expand, Outline)
 - Send to chat
 
 ### Model Export

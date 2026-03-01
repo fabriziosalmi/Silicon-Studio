@@ -18,11 +18,11 @@ Managed in the **Settings** page under "MCP Servers".
 
 Provide:
 
-| Field | Example | Description |
-|-------|---------|-------------|
-| Name | `filesystem` | Display name |
-| Command | `npx` | Executable to run |
-| Args | `-y @modelcontextprotocol/server-filesystem /tmp` | Space-separated arguments |
+| Field   | Example                                           | Description               |
+| ------- | ------------------------------------------------- | ------------------------- |
+| Name    | `filesystem`                                      | Display name              |
+| Command | `npx`                                             | Executable to run         |
+| Args    | `-y @modelcontextprotocol/server-filesystem /tmp` | Space-separated arguments |
 
 The server config is saved to `~/.silicon-studio/mcp_servers.json`.
 
@@ -64,7 +64,7 @@ In the **Data Preparation** page, the MCP tab lets you generate fine-tuning data
 
 ## Current Limitations
 
-- MCP tools are not yet callable from the Chat interface. They can be managed and tested, but the model cannot invoke them during inference.
+- MCP tools are not directly callable from the standard Chat interface. However, they *can* be invoked by the agent within the [Agent Terminal](/features/terminal).
 - Only stdio transport is supported (not HTTP/SSE).
 - Each tool call creates a new server connection (no persistent sessions).
 

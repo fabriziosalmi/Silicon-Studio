@@ -16,13 +16,27 @@ Markdown editor for taking notes alongside AI work. Notes are stored locally and
 
 Notes appear in the left sidebar under "Notes" when expanded.
 
-| Action | Description |
-|--------|-------------|
-| Create | Click `+` or start typing in an empty workspace |
-| Rename | Right-click or use the rename action |
-| Pin | Pinned notes sort to the top |
-| Delete | Remove note from disk |
-| Export | Download as `.md` file (filename based on note title) |
+| Action | Description                                                       |
+| ------ | ----------------------------------------------------------------- |
+| Create | Click `+` or start typing in an empty workspace                   |
+| Rename | Right-click or use the rename action                              |
+| Pin    | Pinned notes sort to the top                                      |
+| Delete | Remove note from disk                                             |
+| Import | Import content from `.md`, `.txt`, `.text` files                  |
+| Export | Download as `.md` or `.txt` file, or save as PDF via print dialog |
+
+*Note: Legacy notes from previous versions (stored in localStorage) are automatically migrated to JSON files on first load.*
+
+## AI Commands & Transforms
+
+The right sidebar provides context-aware AI operations when a model is loaded:
+
+| Category        | Commands                                               | Description                           |
+| --------------- | ------------------------------------------------------ | ------------------------------------- |
+| **AI Commands** | Continue Writing, Summarize, Draft Introduction        | Generates and appends new content     |
+| **Transform**   | To Table, Key Points, Expand Section, Generate Outline | Restructures or expands existing text |
+
+Generated content is streamed directly into the note editor.
 
 ## Chat Integration
 
@@ -46,10 +60,10 @@ Notes are JSON files in `~/.silicon-studio/notes/`:
 
 ## API
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/notes/` | GET | List notes (title, metadata only) |
-| `/api/notes/{id}` | GET | Fetch full note with content |
-| `/api/notes/` | POST | Create note |
-| `/api/notes/{id}` | PATCH | Update note |
-| `/api/notes/{id}` | DELETE | Delete note |
+| Endpoint          | Method | Description                       |
+| ----------------- | ------ | --------------------------------- |
+| `/api/notes/`     | GET    | List notes (title, metadata only) |
+| `/api/notes/{id}` | GET    | Fetch full note with content      |
+| `/api/notes/`     | POST   | Create note                       |
+| `/api/notes/{id}` | PATCH  | Update note                       |
+| `/api/notes/{id}` | DELETE | Delete note                       |

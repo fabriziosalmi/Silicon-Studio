@@ -8,29 +8,31 @@ Visual workflow builder for defining multi-step agent pipelines. Workflows are c
 
 ## Current State
 
-Agent execution is **mocked**. The backend processes nodes sequentially and returns placeholder results. There is no real tool execution, LLM calls, or external integrations in the agent pipeline. This is a work-in-progress feature.
+Agent execution via the visual workflow builder is currently **mocked**. The backend processes nodes sequentially and returns placeholder results without real LLM calls or tool execution.
+
+*Note: In contrast, the [Agent Terminal](/features/terminal) uses a fully functional `SupervisorAgent` with real LLM inference and tool integration. The visual workflow builder is planned to migrate to this infrastructure.*
 
 ## Workflow Definition
 
 A workflow consists of:
 
-| Field | Description |
-|-------|-------------|
-| `id` | UUID |
-| `name` | Display name |
-| `description` | Optional description |
-| `nodes` | Array of processing steps |
-| `edges` | Connections between nodes |
+| Field         | Description               |
+| ------------- | ------------------------- |
+| `id`          | UUID                      |
+| `name`        | Display name              |
+| `description` | Optional description      |
+| `nodes`       | Array of processing steps |
+| `edges`       | Connections between nodes |
 
 ### Node Types
 
-| Type | Description |
-|------|-------------|
-| `input` | Entry point, receives user input |
-| `llm` | (Mocked) LLM inference step |
-| `tool` | (Mocked) Tool execution step |
-| `condition` | (Mocked) Branching logic |
-| `output` | Terminal node, returns result |
+| Type        | Description                      |
+| ----------- | -------------------------------- |
+| `input`     | Entry point, receives user input |
+| `llm`       | (Mocked) LLM inference step      |
+| `tool`      | (Mocked) Tool execution step     |
+| `condition` | (Mocked) Branching logic         |
+| `output`    | Terminal node, returns result    |
 
 ### Edges
 
@@ -38,12 +40,12 @@ Each edge connects a source node to a target node, defining the execution order.
 
 ## Operations
 
-| Action | Description |
-|--------|-------------|
-| Create | Define a new workflow with nodes and edges |
-| Edit | Modify an existing workflow |
-| Delete | Remove a workflow |
-| Execute | Run the workflow with an input string |
+| Action  | Description                                |
+| ------- | ------------------------------------------ |
+| Create  | Define a new workflow with nodes and edges |
+| Edit    | Modify an existing workflow                |
+| Delete  | Remove a workflow                          |
+| Execute | Run the workflow with an input string      |
 
 ## Execution
 
@@ -63,12 +65,12 @@ Workflows are stored in `~/.silicon-studio/agents/agents.json`.
 
 ## API
 
-| Endpoint | Method | Description |
-|----------|--------|-------------|
-| `/api/agents/` | GET | List all workflows |
-| `/api/agents/` | POST | Create/update workflow |
-| `/api/agents/{id}` | DELETE | Delete workflow |
-| `/api/agents/{id}/execute` | POST | Execute workflow |
+| Endpoint                   | Method | Description            |
+| -------------------------- | ------ | ---------------------- |
+| `/api/agents/`             | GET    | List all workflows     |
+| `/api/agents/`             | POST   | Create/update workflow |
+| `/api/agents/{id}`         | DELETE | Delete workflow        |
+| `/api/agents/{id}/execute` | POST   | Execute workflow       |
 
 ## Planned Improvements
 
