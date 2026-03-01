@@ -30,6 +30,8 @@ try:
     logger.info("Imported rag router")
     from app.api.agents import router as agents_router
     logger.info("Imported agents router")
+    from app.api.conversations import router as conversations_router
+    logger.info("Imported conversations router")
 
 except Exception as e:
     logger.critical(f"Import error: {e}", exc_info=True)
@@ -60,6 +62,7 @@ app.include_router(engine_router, prefix="/api/engine", tags=["engine"])
 app.include_router(deployment_router, prefix="/api/deployment", tags=["deployment"])
 app.include_router(rag_router, prefix="/api/rag", tags=["rag"])
 app.include_router(agents_router, prefix="/api/agents", tags=["agents"])
+app.include_router(conversations_router, prefix="/api/conversations", tags=["conversations"])
 
 
 @app.get("/health")

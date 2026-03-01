@@ -74,6 +74,30 @@ export interface AgentExecutionResult {
     steps: { node_id: string; node_name: string; status: string; timestamp: number; output: string }[]
 }
 
+export interface ConversationMessage {
+    id?: string
+    role: 'system' | 'user' | 'assistant'
+    content: string
+    displayContent?: string
+    actionType?: string
+    stats?: { tokensPerSecond: number; timeToFirstToken: number; totalTokens: number }
+}
+
+export interface ConversationSummary {
+    id: string
+    title: string
+    model_id: string | null
+    created_at: string
+    updated_at: string
+    message_count: number
+    pinned: boolean
+    match_context?: string
+}
+
+export interface Conversation extends ConversationSummary {
+    messages: ConversationMessage[]
+}
+
 export interface DeploymentStatus {
     running: boolean
     pid: number | null
@@ -300,6 +324,52 @@ export const apiClient = {
             if (!res.ok) throw new Error('Failed to execute agent');
             return res.json();
         }
+    },
+    conversations: {
+        list: async (): Promise<ConversationSummary[]> => {
+            const res = await fetch(`${API_BASE}/api/conversations/`);
+            if (!res.ok) throw new Error('Failed to fetch conversations');
+            return res.json();
+        },
+        get: async (id: string): Promise<Conversation> => {
+            const res = await fetch(`${API_BASE}/api/conversations/${id}`);
+            if (!res.ok) throw new Error('Failed to fetch conversation');
+            return res.json();
+        },
+        create: async (title?: string, messages?: ConversationMessage[], modelId?: string): Promise<Conversation> => {
+            const res = await fetch(`${API_BASE}/api/conversations/`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ title, messages, model_id: modelId })
+            });
+            if (!res.ok) throw new Error('Failed to create conversation');
+            return res.json();
+        },
+        update: async (id: string, updates: { title?: string; messages?: ConversationMessage[]; model_id?: string; pinned?: boolean }): Promise<Conversation> => {
+            const res = await fetch(`${API_BASE}/api/conversations/${id}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(updates)
+            });
+            if (!res.ok) throw new Error('Failed to update conversation');
+            return res.json();
+        },
+        delete: async (id: string): Promise<{ status: string }> => {
+            const res = await fetch(`${API_BASE}/api/conversations/${id}`, {
+                method: 'DELETE'
+            });
+            if (!res.ok) throw new Error('Failed to delete conversation');
+            return res.json();
+        },
+        search: async (query: string): Promise<ConversationSummary[]> => {
+            const res = await fetch(`${API_BASE}/api/conversations/search`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ q: query })
+            });
+            if (!res.ok) throw new Error('Failed to search conversations');
+            return res.json();
+        },
     },
     deployment: {
         start: async (modelPath: string, host: string, port: number): Promise<{ status: string; message: string; pid: number }> => {

@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef } from 'react'
-import { apiClient } from '../api/client'
+import { useState, useEffect, useRef, useCallback } from 'react'
+import { apiClient, ConversationSummary } from '../api/client'
 import { PageHeader } from './ui/PageHeader'
-import { Settings2, SlidersHorizontal, Cpu, Copy, Check, Eraser, ChevronRight, Square, ArrowUp, Wand2, Shield, Zap, FileText, TestTube2, Expand, Shrink, Languages, Briefcase, MessageCircle, GraduationCap, Scale, Eye, EyeOff, User, Baby, FlaskConical, Feather } from 'lucide-react'
+import { Settings2, SlidersHorizontal, Cpu, Copy, Check, Eraser, ChevronRight, Square, ArrowUp, Wand2, Shield, Zap, FileText, TestTube2, Expand, Shrink, Languages, Briefcase, MessageCircle, GraduationCap, Scale, Eye, EyeOff, User, Baby, FlaskConical, Feather, History, Plus, Download } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { useGlobalState } from '../context/GlobalState'
+import { ConversationListPanel } from './ConversationListPanel'
 
 interface Message {
     id?: string
@@ -22,6 +23,7 @@ interface Message {
 
 const CHAT_STORAGE_KEY = 'silicon-studio-chat-history';
 const SETTINGS_STORAGE_KEY = 'silicon-studio-chat-settings';
+const CONVERSATIONS_MIGRATED_KEY = 'silicon-studio-conversations-migrated';
 
 export function ChatInterface() {
     const { activeModel } = useGlobalState()
@@ -63,6 +65,20 @@ export function ChatInterface() {
     const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
     const [isGenerating, setIsGenerating] = useState(false)
 
+    // Conversation management state
+    const [showHistory, setShowHistory] = useState(false)
+    const [conversationList, setConversationList] = useState<ConversationSummary[]>([])
+    const [activeConversationId, setActiveConversationId] = useState<string | null>(null)
+    const activeConversationIdRef = useRef<string | null>(null)
+    const [searchQuery, setSearchQuery] = useState('')
+    const [renamingId, setRenamingId] = useState<string | null>(null)
+    const [renameValue, setRenameValue] = useState('')
+    const [listLoading, setListLoading] = useState(false)
+    const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+    // Keep ref in sync for use in async callbacks
+    useEffect(() => { activeConversationIdRef.current = activeConversationId }, [activeConversationId])
+
     // Dynamic defaults: adjust maxTokens when a model with known context_window is loaded
     useEffect(() => {
         const cw = activeModel?.context_window;
@@ -80,16 +96,83 @@ export function ChatInterface() {
         });
     }, [activeModel?.context_window]);
 
+    const currentModelId = activeModel?.id ?? '';
+    const currentModelName = activeModel?.name ?? '';
+
+    // --- Conversation helpers ---
+    const fetchConversations = useCallback(async () => {
+        try {
+            setListLoading(true);
+            const list = await apiClient.conversations.list();
+            setConversationList(list);
+        } catch (e) {
+            console.error('Failed to fetch conversations', e);
+        } finally {
+            setListLoading(false);
+        }
+    }, []);
+
+    const autoTitle = (msgs: Message[]) => {
+        const first = msgs.find(m => m.role === 'user');
+        if (!first) return 'New conversation';
+        const raw = first.content.slice(0, 60);
+        return raw.length < first.content.length ? raw.replace(/\s+\S*$/, '') + '...' : raw;
+    };
+
+    // Migration: move old localStorage chat to backend on first load
+    useEffect(() => {
+        const migrate = async () => {
+            const migrated = localStorage.getItem(CONVERSATIONS_MIGRATED_KEY);
+            if (migrated) { fetchConversations(); return; }
+            try {
+                const oldMessages = localStorage.getItem(CHAT_STORAGE_KEY);
+                if (oldMessages) {
+                    const parsed = JSON.parse(oldMessages);
+                    if (Array.isArray(parsed) && parsed.length > 0) {
+                        const conv = await apiClient.conversations.create(
+                            autoTitle(parsed), parsed, currentModelId || undefined
+                        );
+                        setActiveConversationId(conv.id);
+                    }
+                }
+            } catch (e) {
+                console.error('Migration failed', e);
+            }
+            localStorage.setItem(CONVERSATIONS_MIGRATED_KEY, 'true');
+            fetchConversations();
+        };
+        migrate();
+    }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Write-through: localStorage (immediate) + backend (debounced 800ms)
     useEffect(() => {
         localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(messages));
-    }, [messages]);
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+        if (messages.length === 0) return;
+        saveTimeoutRef.current = setTimeout(async () => {
+            try {
+                const convId = activeConversationIdRef.current;
+                if (convId) {
+                    await apiClient.conversations.update(convId, {
+                        messages, model_id: currentModelId || undefined,
+                    });
+                } else {
+                    const conv = await apiClient.conversations.create(
+                        autoTitle(messages), messages, currentModelId || undefined
+                    );
+                    setActiveConversationId(conv.id);
+                }
+                fetchConversations();
+            } catch (e) {
+                console.error('Failed to save conversation', e);
+            }
+        }, 800);
+        return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
+    }, [messages]); // eslint-disable-line react-hooks/exhaustive-deps
 
     useEffect(() => {
         localStorage.setItem(SETTINGS_STORAGE_KEY, JSON.stringify(settings));
     }, [settings]);
-
-    const currentModelId = activeModel?.id ?? '';
-    const currentModelName = activeModel?.name ?? '';
 
     useEffect(() => {
         messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -103,11 +186,83 @@ export function ChatInterface() {
         }
     }, [input])
 
-    const handleClearChat = () => {
-        if (window.confirm("Clear chat history?")) {
-            setMessages([]);
-            localStorage.removeItem(CHAT_STORAGE_KEY);
+    const handleNewConversation = () => {
+        setMessages([]);
+        setActiveConversationId(null);
+        localStorage.removeItem(CHAT_STORAGE_KEY);
+    };
+
+    const handleSelectConversation = async (id: string) => {
+        try {
+            const conv = await apiClient.conversations.get(id);
+            setMessages(conv.messages || []);
+            setActiveConversationId(id);
+            localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(conv.messages || []));
+        } catch (e) {
+            console.error('Failed to load conversation', e);
         }
+    };
+
+    const handleDeleteConversation = async (id: string) => {
+        if (!window.confirm('Delete this conversation?')) return;
+        try {
+            await apiClient.conversations.delete(id);
+            if (activeConversationId === id) handleNewConversation();
+            fetchConversations();
+        } catch (e) {
+            console.error('Failed to delete conversation', e);
+        }
+    };
+
+    const handleRenameConversation = async (id: string, newTitle: string) => {
+        try {
+            await apiClient.conversations.update(id, { title: newTitle });
+            setRenamingId(null);
+            fetchConversations();
+        } catch (e) {
+            console.error('Failed to rename conversation', e);
+        }
+    };
+
+    const handleTogglePin = async (id: string, currentPinned: boolean) => {
+        try {
+            await apiClient.conversations.update(id, { pinned: !currentPinned });
+            fetchConversations();
+        } catch (e) {
+            console.error('Failed to toggle pin', e);
+        }
+    };
+
+    const handleSearch = async (query: string) => {
+        setSearchQuery(query);
+        if (!query.trim()) { fetchConversations(); return; }
+        try {
+            const results = await apiClient.conversations.search(query);
+            setConversationList(results);
+        } catch (e) {
+            console.error('Search failed', e);
+        }
+    };
+
+    const handleExport = (format: 'md' | 'json') => {
+        const title = conversationList.find(c => c.id === activeConversationId)?.title || 'conversation';
+        const safeName = title.replace(/[^a-zA-Z0-9 _-]/g, '_').slice(0, 50);
+        let blob: Blob;
+        if (format === 'md') {
+            const md = messages.map(msg => {
+                const header = msg.role === 'user' ? '## User' : msg.role === 'assistant' ? '## Assistant' : '## System';
+                return `${header}\n\n${msg.content}`;
+            }).join('\n\n---\n\n');
+            blob = new Blob([md], { type: 'text/markdown' });
+        } else {
+            blob = new Blob([JSON.stringify({ title, messages, exported_at: new Date().toISOString() }, null, 2)], { type: 'application/json' });
+        }
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `${safeName}.${format === 'md' ? 'md' : 'json'}`;
+        a.click();
+        URL.revokeObjectURL(url);
     };
 
     const handleStop = async () => {
@@ -326,14 +481,45 @@ export function ChatInterface() {
         <div className="h-full flex flex-col text-white overflow-hidden pb-4">
             <PageHeader>
                 <div className="flex items-center gap-2">
+                    <button
+                        onClick={() => { setShowHistory(!showHistory); if (!showHistory) fetchConversations(); }}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showHistory ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                    >
+                        <History className="w-3.5 h-3.5" />
+                        History
+                    </button>
                     {messages.length > 0 && (
                         <button
-                            onClick={handleClearChat}
-                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-500 hover:text-red-400 hover:bg-red-500/5 transition-colors"
+                            onClick={handleNewConversation}
+                            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
                         >
-                            <Eraser className="w-3.5 h-3.5" />
-                            Clear
+                            <Plus className="w-3.5 h-3.5" />
+                            New
                         </button>
+                    )}
+                    {messages.length > 0 && (
+                        <div className="relative group/export">
+                            <button
+                                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                            >
+                                <Download className="w-3.5 h-3.5" />
+                                Export
+                            </button>
+                            <div className="hidden group-hover/export:block absolute top-full left-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl py-1 z-50 min-w-[110px]">
+                                <button
+                                    onClick={() => handleExport('md')}
+                                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                                >
+                                    Markdown
+                                </button>
+                                <button
+                                    onClick={() => handleExport('json')}
+                                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                                >
+                                    JSON
+                                </button>
+                            </div>
+                        </div>
                     )}
                     <button
                         onClick={() => setShowSettings(!showSettings)}
@@ -346,6 +532,26 @@ export function ChatInterface() {
             </PageHeader>
 
             <div className="flex-1 flex gap-4 overflow-hidden min-h-0 pr-4">
+                {/* Conversation History Panel */}
+                {showHistory && (
+                    <ConversationListPanel
+                        conversations={conversationList}
+                        activeId={activeConversationId}
+                        searchQuery={searchQuery}
+                        onSearch={handleSearch}
+                        onSelect={handleSelectConversation}
+                        onDelete={handleDeleteConversation}
+                        onRename={handleRenameConversation}
+                        onTogglePin={handleTogglePin}
+                        renamingId={renamingId}
+                        renameValue={renameValue}
+                        onStartRename={(id: string, title: string) => { setRenamingId(id); setRenameValue(title); }}
+                        onCancelRename={() => setRenamingId(null)}
+                        onRenameValueChange={setRenameValue}
+                        loading={listLoading}
+                    />
+                )}
+
                 {/* Main Chat Area */}
                 <div className="flex-1 flex flex-col overflow-hidden relative">
 
