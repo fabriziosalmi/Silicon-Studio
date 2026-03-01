@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { apiClient } from '../api/client'
+import type { ModelEntry, JobStatus } from '../api/client'
 import { useGlobalState } from '../context/GlobalState'
+import { useToast } from './ui/Toast'
 import { Card } from './ui/Card'
 import { Cpu, Activity, Play, Settings2, ShieldAlert, FileText, Download } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
@@ -14,7 +16,8 @@ const PRESETS = {
 
 export function EngineInterface() {
     const { setIsTraining } = useGlobalState()
-    const [models, setModels] = useState<any[]>([])
+    const { toast } = useToast()
+    const [models, setModels] = useState<ModelEntry[]>([])
     const [selectedModel, setSelectedModel] = useState('')
     const [datasetPath, setDatasetPath] = useState('train.jsonl')
 
@@ -34,18 +37,18 @@ export function EngineInterface() {
     const [jobName, setJobName] = useState('')
 
     // Job State
-    const [jobStatus, setJobStatus] = useState<any>(null)
+    const [jobStatus, setJobStatus] = useState<JobStatus | null>(null)
     const [loading, setLoading] = useState(false)
-    const [chartData, setChartData] = useState<any[]>([])
+    const [chartData, setChartData] = useState<{ step: number; loss: number }[]>([])
     const [exporting, setExporting] = useState(false)
     const [exportPath] = useState('~/Documents/Silicon-Studio/Exports')
 
     useEffect(() => {
-        apiClient.engine.getModels().then((data: any[]) => {
+        apiClient.engine.getModels().then((data) => {
             const downloaded = data.filter(m => m.downloaded && !m.is_finetuned); // Base models only
             setModels(downloaded)
             if (downloaded.length) setSelectedModel(downloaded[0].id)
-        }).catch(console.error)
+        }).catch(() => {})
     }, [])
 
     const handlePresetChange = (p: keyof typeof PRESETS) => {
@@ -62,7 +65,7 @@ export function EngineInterface() {
 
     const startTraining = async () => {
         if (!jobName.trim()) {
-            alert("Please enter a Job Name to identify your fine-tuned model.")
+            toast('Please enter a Job Name to identify your fine-tuned model.', 'warning')
             return
         }
 
@@ -86,8 +89,7 @@ export function EngineInterface() {
             setIsTraining(true)
             pollStatus(data.job_id)
         } catch (err: any) {
-            console.error(err)
-            alert(`Fine-tuning failed to start: ${err.message}`)
+            toast(`Fine-tuning failed to start: ${err.message}`, 'error')
         } finally {
             setLoading(false)
         }
@@ -136,9 +138,9 @@ export function EngineInterface() {
                 ? exportPath // Let the backend expand ~ server-side
                 : exportPath
             await apiClient.engine.exportModel(modelId, `${fullPath}/${jobStatus.job_name || 'model'}_q${qBits}`, qBits)
-            alert(`Model exported successfully to ${fullPath}`)
+            toast(`Model exported successfully to ${fullPath}`, 'success')
         } catch (err: any) {
-            alert(`Export failed: ${err.message}`)
+            toast(`Export failed: ${err.message}`, 'error')
         } finally {
             setExporting(false)
         }

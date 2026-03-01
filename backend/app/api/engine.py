@@ -13,8 +13,8 @@ router = APIRouter()
 service = MLXEngineService()
 
 class FineTuneRequest(BaseModel):
-    model_id: str
-    dataset_path: str
+    model_id: str = Field(min_length=1, max_length=255)
+    dataset_path: str = Field(min_length=1, max_length=1024)
     epochs: int = Field(default=3, ge=1, le=100)
     learning_rate: float = Field(default=1e-4, gt=0, le=1.0)
     batch_size: int = Field(default=1, ge=1, le=64)
@@ -23,7 +23,7 @@ class FineTuneRequest(BaseModel):
     max_seq_length: int = Field(default=512, ge=64, le=32768)
     lora_dropout: float = Field(default=0.0, ge=0.0, le=1.0)
     lora_layers: int = Field(default=8, ge=1, le=128)
-    job_name: str = ""
+    job_name: str = Field(default="", max_length=255)
 
 @router.post("/finetune")
 async def start_finetune(request: FineTuneRequest):
@@ -48,7 +48,7 @@ async def list_models():
     return service.get_models_status()
 
 class DownloadRequest(BaseModel):
-    model_id: str
+    model_id: str = Field(min_length=1, max_length=255)
 
 @router.post("/models/download")
 async def download_model(request: DownloadRequest, background_tasks: BackgroundTasks):
@@ -65,9 +65,9 @@ async def delete_model(request: DownloadRequest):
     return {"status": "deleted", "model_id": request.model_id}
 
 class RegisterRequest(BaseModel):
-    name: str
-    path: str
-    url: str = ""
+    name: str = Field(min_length=1, max_length=255)
+    path: str = Field(min_length=1, max_length=1024)
+    url: str = Field(default="", max_length=2048)
 
 @router.post("/models/register")
 async def register_model(request: RegisterRequest):
@@ -81,7 +81,7 @@ async def register_model(request: RegisterRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 class ScanRequest(BaseModel):
-    path: str
+    path: str = Field(min_length=1, max_length=1024)
 
 @router.post("/models/scan")
 async def scan_models(request: ScanRequest):
@@ -93,7 +93,7 @@ async def scan_models(request: ScanRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 class LoadModelRequest(BaseModel):
-    model_id: str
+    model_id: str = Field(min_length=1, max_length=255)
 
 @router.post("/models/load")
 async def load_model(request: LoadModelRequest):
@@ -115,7 +115,7 @@ async def unload_model():
         raise HTTPException(status_code=500, detail=str(e))
 
 class ChatRequest(BaseModel):
-    model_id: str
+    model_id: str = Field(min_length=1, max_length=255)
     messages: list
     temperature: float = Field(default=0.7, ge=0.0, le=2.0)
     max_tokens: int = Field(default=512, ge=1, le=32768)
@@ -145,8 +145,8 @@ async def stop_generation():
     return {"status": "stopped"}
 
 class ExportRequest(BaseModel):
-    model_id: str
-    output_path: str
+    model_id: str = Field(min_length=1, max_length=255)
+    output_path: str = Field(min_length=1, max_length=1024)
     q_bits: int = Field(default=4, ge=0, le=16)
 
 @router.post("/models/export")

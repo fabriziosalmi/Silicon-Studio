@@ -39,8 +39,8 @@ def _read_output(pipe, label: str):
         pipe.close()
 
 class StartRequest(BaseModel):
-    model_path: str
-    host: str = "127.0.0.1"
+    model_path: str = Field(min_length=1, max_length=1024)
+    host: str = Field(default="127.0.0.1", max_length=255)
     port: int = Field(default=8080, ge=1024, le=65535)
 
 @router.post("/start")

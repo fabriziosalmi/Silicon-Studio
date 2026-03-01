@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import Optional
 from app.notes.service import NotesService
 
@@ -8,13 +8,13 @@ service = NotesService()
 
 
 class NoteCreate(BaseModel):
-    title: str = "Untitled"
-    content: str = ""
+    title: str = Field(default="Untitled", max_length=500)
+    content: str = Field(default="", max_length=500_000)
 
 
 class NoteUpdate(BaseModel):
-    title: Optional[str] = None
-    content: Optional[str] = None
+    title: Optional[str] = Field(default=None, max_length=500)
+    content: Optional[str] = Field(default=None, max_length=500_000)
     pinned: Optional[bool] = None
 
 

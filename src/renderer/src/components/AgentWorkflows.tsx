@@ -3,14 +3,17 @@ import { PageHeader } from './ui/PageHeader'
 import { Card } from './ui/Card'
 import { Bot, Search, Terminal, FileCode2, Play, Plus, Map, Trash2, Save, Sparkles } from 'lucide-react'
 import { apiClient } from '../api/client'
+import type { AgentDefinition } from '../api/client'
+import { useToast } from './ui/Toast'
 
 export function AgentWorkflows() {
-    const [agents, setAgents] = useState<any[]>([])
-    const [activeAgent, setActiveAgent] = useState<any | null>(null)
+    const [agents, setAgents] = useState<AgentDefinition[]>([])
+    const [activeAgent, setActiveAgent] = useState<AgentDefinition | null>(null)
     const [loading, setLoading] = useState(false)
     const [executing, setExecuting] = useState(false)
     const [searchTerm, setSearchTerm] = useState("")
     const [agentInput, setAgentInput] = useState("")
+    const { toast } = useToast()
 
     useEffect(() => {
         fetchAgents()
@@ -21,8 +24,8 @@ export function AgentWorkflows() {
             setLoading(true)
             const data = await apiClient.agents.getAgents()
             setAgents(data)
-        } catch (e) {
-            console.error("Failed to fetch agents", e)
+        } catch {
+            // fetch failed silently
         } finally {
             setLoading(false)
         }
@@ -34,9 +37,9 @@ export function AgentWorkflows() {
             const saved = await apiClient.agents.saveAgent(activeAgent)
             setActiveAgent(saved)
             fetchAgents()
-            alert("Workflow Saved Successfully!")
+            toast('Workflow saved successfully!', 'success')
         } catch (e) {
-            alert("Failed to save workflow")
+            toast('Failed to save workflow', 'error')
         }
     }
 
@@ -47,7 +50,7 @@ export function AgentWorkflows() {
             if (activeAgent?.id === id) setActiveAgent(null)
             fetchAgents()
         } catch (e) {
-            alert("Failed to delete workflow")
+            toast('Failed to delete workflow', 'error')
         }
     }
 
@@ -56,10 +59,9 @@ export function AgentWorkflows() {
         try {
             setExecuting(true)
             const result = await apiClient.agents.execute(activeAgent.id, agentInput || "Test Input")
-            console.log("Execution Result:", result)
-            alert(`Execution Successful!\nCompleted ${result.steps?.length || 0} nodes in ${result.execution_time?.toFixed(2)}s`)
+            toast(`Execution successful! Completed ${result.steps?.length || 0} nodes in ${result.execution_time?.toFixed(2)}s`, 'success')
         } catch (e) {
-            alert("Execution failed")
+            toast('Execution failed', 'error')
         } finally {
             setExecuting(false)
         }

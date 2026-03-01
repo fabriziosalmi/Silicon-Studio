@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef, useEffect, useCallback } from 'react'
 import { PageHeader } from './ui/PageHeader'
+import { useToast } from './ui/Toast'
 import { Wand2, Copy, Loader2, Download, Upload, FileText, Table, List, Expand, ListTree, Send, Printer } from 'lucide-react'
 import { SimpleMdeReact } from "react-simplemde-editor";
 import "easymde/dist/easymde.min.css";
@@ -10,6 +11,7 @@ import { apiClient, cleanModelName } from '../api/client'
 const LEGACY_STORAGE_KEY = 'silicon-studio-notes';
 
 export function Workspace() {
+    const { toast } = useToast()
     const { activeModel, setPendingChatInput } = useGlobalState()
     const { activeNoteId, setActiveNoteId, fetchNotes } = useNotes()
     const fileInputRef = useRef<HTMLInputElement>(null)
@@ -88,8 +90,8 @@ export function Workspace() {
             if (activeNoteId) {
                 try {
                     await apiClient.notes.update(activeNoteId, { content: value });
-                } catch (e) {
-                    console.error('Note save failed:', e);
+                } catch {
+                    // save failed silently
                 }
             } else if (value.trim() && !creatingNoteRef.current) {
                 // Auto-create a new note (guarded against double-create)
@@ -100,8 +102,8 @@ export function Workspace() {
                     skipLoadRef.current = true;
                     setActiveNoteId(note.id);
                     fetchNotes();
-                } catch (e) {
-                    console.error('Note create failed:', e);
+                } catch {
+                    // create failed silently
                 } finally {
                     creatingNoteRef.current = false;
                 }
@@ -230,7 +232,7 @@ export function Workspace() {
             }
         } catch (e: unknown) {
             const msg = e instanceof Error ? e.message : String(e);
-            alert(`AI generation failed: ${msg}`)
+            toast(`AI generation failed: ${msg}`, 'error')
         } finally {
             setIsGenerating(false)
         }

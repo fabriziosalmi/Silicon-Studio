@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { Card } from './ui/Card'
+import { useToast } from './ui/Toast'
 import { TestTube, Play, BarChart2, Loader2 } from 'lucide-react'
 import { useGlobalState } from '../context/GlobalState'
 import { apiClient, cleanModelName } from '../api/client'
@@ -15,6 +16,7 @@ interface EvalResult {
 }
 
 export function Evaluations() {
+    const { toast } = useToast()
     const { activeModel } = useGlobalState()
     const [runningEval, setRunningEval] = useState<string | null>(null)
     const [progress, setProgress] = useState(0)
@@ -40,7 +42,7 @@ export function Evaluations() {
 
     const handleRunEval = async (benchId: string) => {
         if (!activeModel) {
-            alert("Please load a model into memory first from the Models tab.");
+            toast('Please load a model into memory first from the Models tab.', 'warning');
             return;
         }
         setRunningEval(benchId);
@@ -130,7 +132,7 @@ export function Evaluations() {
 
             setHistory(prev => [result, ...prev]);
         } catch (e: any) {
-            alert(`Evaluation failed: ${e.message}`);
+            toast(`Evaluation failed: ${e.message}`, 'error');
         } finally {
             setRunningEval(null);
             setProgress(0);

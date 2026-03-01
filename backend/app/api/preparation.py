@@ -13,21 +13,21 @@ router = APIRouter()
 service = DataPreparationService()
 
 class PreviewRequest(BaseModel):
-    file_path: str
+    file_path: str = Field(min_length=1, max_length=1024)
     limit: int = Field(default=5, ge=1, le=1000)
 
 class ConvertRequest(BaseModel):
-    file_path: str
-    output_path: str
-    instruction_col: str
+    file_path: str = Field(min_length=1, max_length=1024)
+    output_path: str = Field(min_length=1, max_length=1024)
+    instruction_col: str = Field(min_length=1, max_length=255)
     input_col: Optional[str] = None
-    output_col: str
+    output_col: str = Field(min_length=1, max_length=255)
 
 class McpGenerateRequest(BaseModel):
-    model_id: str
-    server_id: str
-    prompt: str
-    output_path: str
+    model_id: str = Field(min_length=1, max_length=255)
+    server_id: str = Field(min_length=1, max_length=255)
+    prompt: str = Field(min_length=1, max_length=2000)
+    output_path: str = Field(min_length=1, max_length=1024)
 
 @router.post("/preview")
 async def preview_csv(request: PreviewRequest):

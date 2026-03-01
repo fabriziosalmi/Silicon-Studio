@@ -1,10 +1,12 @@
 import { useState, useEffect } from 'react'
 import { apiClient, cleanModelName, type PreviewRow } from '../api/client'
 import { Card } from './ui/Card'
+import { useToast } from './ui/Toast'
 import { useGlobalState } from '../context/GlobalState'
 import { Database, FileText, Server, Sparkles, MessageSquare, FolderOpen, Save } from 'lucide-react'
 
 export function DataPreparation() {
+    const { toast } = useToast()
     const [dataMode, setDataMode] = useState<'file' | 'mcp'>('file')
 
     // File Mode State
@@ -79,7 +81,7 @@ export function DataPreparation() {
                 inputCol || undefined,
                 outputCol
             )
-            alert(`Success! Training data saved to: ${outputPath}`)
+            toast(`Training data saved to: ${outputPath}`, 'success')
             setPreview([])
             setFilePath("")
             setFileName("")
@@ -116,7 +118,7 @@ export function DataPreparation() {
             setInstructionCol("instruction");
             setOutputCol("output");
             setInputCol("");
-            alert(`Success! Generated ${res.rows} rows via ${mcpServer} and saved to ${outputPath}`);
+            toast(`Generated ${res.rows} rows via ${mcpServer} and saved to ${outputPath}`, 'success');
         } catch (err: any) {
             setError("Generation failed: " + err.message);
         } finally {

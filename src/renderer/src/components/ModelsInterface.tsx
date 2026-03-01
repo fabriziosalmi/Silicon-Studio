@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react';
 import { apiClient, cleanModelName } from '../api/client';
+import type { ModelEntry } from '../api/client';
 import { PageHeader } from './ui/PageHeader';
+import { useToast } from './ui/Toast';
 import { Search, Download, Trash2, Database, HardDrive, FileText, Play, LogOut } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useGlobalState } from '../context/GlobalState';
 
 export function ModelsInterface() {
-    const [models, setModels] = useState<any[]>([]);
+    const { toast } = useToast();
+    const [models, setModels] = useState<ModelEntry[]>([]);
     const [activeTab, setActiveTab] = useState<'my-models' | 'discover'>('my-models');
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState<Set<string>>(new Set());
@@ -15,7 +18,7 @@ export function ModelsInterface() {
     const { setActiveModel, activeModel } = useGlobalState();
 
     // Split-view State
-    const [selectedModel, setSelectedModel] = useState<any | null>(null);
+    const [selectedModel, setSelectedModel] = useState<ModelEntry | null>(null);
     const [readmeContent, setReadmeContent] = useState<string>("Select a model to view details.");
     const [readmeLoading, setReadmeLoading] = useState(false);
 
@@ -23,7 +26,7 @@ export function ModelsInterface() {
     const [showAddModal, setShowAddModal] = useState(false);
     const [customName, setCustomName] = useState("");
     const [customPath, setCustomPath] = useState("");
-    const [foundModels, setFoundModels] = useState<any[]>([]);
+    const [foundModels, setFoundModels] = useState<ModelEntry[]>([]);
     const [selectedPaths, setSelectedPaths] = useState<Set<string>>(new Set());
     const [scanning, setScanning] = useState(false);
 
@@ -55,7 +58,7 @@ export function ModelsInterface() {
             setDownloading(prev => new Set(prev).add(modelId));
             await apiClient.engine.downloadModel(modelId);
         } catch (err: any) {
-            alert(`Failed to start download: ${err.message}`);
+            toast(`Failed to start download: ${err.message}`, 'error');
             setDownloading(prev => {
                 const next = new Set(prev);
                 next.delete(modelId);
@@ -84,19 +87,19 @@ export function ModelsInterface() {
         return isNaN(num) ? undefined : num;
     };
 
-    const loadModelIntoMemory = async (model: any) => {
+    const loadModelIntoMemory = async (model: ModelEntry) => {
         try {
             const result = await apiClient.engine.loadModel(model.id);
             setActiveModel({
                 id: model.id,
                 name: cleanModelName(model.name),
                 size: model.size,
-                path: model.path_local || model.id,
+                path: model.local_path || model.id,
                 architecture: model.architecture,
                 context_window: result.context_window ?? parseContextWindow(model.context_window),
             });
         } catch (e: any) {
-            alert(`Failed to load model: ${e.message}`);
+            toast(`Failed to load model: ${e.message}`, 'error');
         }
     };
 
@@ -121,7 +124,7 @@ export function ModelsInterface() {
         }
     };
 
-    const selectModelForDetails = (model: any) => {
+    const selectModelForDetails = (model: ModelEntry) => {
         setSelectedModel(model);
         fetchReadme(model.id);
     };
@@ -298,7 +301,7 @@ export function ModelsInterface() {
                                                         <div className="flex flex-col justify-center">
                                                             <div className="font-semibold text-white/90 flex items-center gap-2 text-[13px] leading-tight">
                                                                 {cleanModelName(model.name)}
-                                                                {model.is_finetuned && <span className="text-[9px] px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 border border-purple-500/20 uppercase tracking-wide font-bold">Fine-Tuned</span>}
+                                                                {model.is_finetuned && <span className="text-[9px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-300 border border-blue-500/20 uppercase tracking-wide font-bold">Fine-Tuned</span>}
                                                             </div>
                                                             <div className="text-[11px] text-gray-500 font-mono mt-0.5 truncate max-w-[220px]" title={model.id}>{model.id}</div>
                                                         </div>
@@ -520,9 +523,9 @@ export function ModelsInterface() {
                                             setCustomPath(p);
                                             handleScan(p);
                                         }}
-                                        className="text-[10px] font-bold bg-purple-500/10 hover:bg-purple-500/20 text-purple-400 border border-purple-500/20 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                                        className="text-[10px] font-bold bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
                                     >
-                                        <div className="w-1 h-1 rounded-full bg-purple-400"></div>
+                                        <div className="w-1 h-1 rounded-full bg-blue-400"></div>
                                         LM Studio
                                     </button>
                                     <button
@@ -544,9 +547,9 @@ export function ModelsInterface() {
                                             setCustomPath(p);
                                             handleScan(p);
                                         }}
-                                        className="text-[10px] font-bold bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 border border-orange-500/20 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                                        className="text-[10px] font-bold bg-blue-500/10 hover:bg-blue-500/20 text-blue-400 border border-blue-500/20 px-2.5 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
                                     >
-                                        <div className="w-1 h-1 rounded-full bg-orange-400"></div>
+                                        <div className="w-1 h-1 rounded-full bg-blue-400"></div>
                                         HF Cache
                                     </button>
                                 </div>
@@ -575,8 +578,8 @@ export function ModelsInterface() {
                                                 </div>
                                                 <input
                                                     type="checkbox"
-                                                    checked={selectedPaths.has(m.path)}
-                                                    onChange={() => togglePathSelection(m.path)}
+                                                    checked={selectedPaths.has(m.path || '')}
+                                                    onChange={() => togglePathSelection(m.path || '')}
                                                     className="w-4 h-4 rounded border-white/10 bg-black/40 text-blue-500"
                                                 />
                                             </div>

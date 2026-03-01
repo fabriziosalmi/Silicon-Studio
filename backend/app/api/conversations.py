@@ -8,7 +8,7 @@ service = ConversationService()
 
 
 class ConversationCreate(BaseModel):
-    title: str = "New conversation"
+    title: str = Field(default="New conversation", max_length=500)
     messages: Optional[List[Dict[str, Any]]] = None
     model_id: Optional[str] = None
 

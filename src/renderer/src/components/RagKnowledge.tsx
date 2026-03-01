@@ -3,10 +3,13 @@ import { PageHeader } from './ui/PageHeader'
 import { Card } from './ui/Card'
 import { Brain, Database, Upload, FileText, Trash2, Search, Plus } from 'lucide-react'
 import { apiClient } from '../api/client'
+import type { RagCollection } from '../api/client'
+import { useToast } from './ui/Toast'
 
 export function RagKnowledge() {
+    const { toast } = useToast()
     const [activeTab, setActiveTab] = useState<'collections' | 'ingest'>('collections')
-    const [collections, setCollections] = useState<any[]>([])
+    const [collections, setCollections] = useState<RagCollection[]>([])
     const [uploading, setUploading] = useState(false)
     const [chunkSize, setChunkSize] = useState(512)
     const [chunkOverlap, setChunkOverlap] = useState(50)
@@ -31,8 +34,8 @@ export function RagKnowledge() {
         try {
             const data = await apiClient.rag.getCollections()
             setCollections(data)
-        } catch (e) {
-            console.error(e)
+        } catch {
+            // fetch failed silently
         }
     }
 
@@ -44,7 +47,7 @@ export function RagKnowledge() {
             setShowCreateModal(false)
             fetchCollections()
         } catch (e) {
-            alert("Failed to create collection")
+            toast("Failed to create collection", "error")
         }
     }
 
@@ -54,17 +57,17 @@ export function RagKnowledge() {
             await apiClient.rag.deleteCollection(id)
             fetchCollections()
         } catch (e) {
-            alert("Failed to delete")
+            toast("Failed to delete", "error")
         }
     }
 
     const handleIngest = async () => {
         if (collections.length === 0) {
-            alert("Create a collection first!")
+            toast("Create a collection first!", "error")
             return
         }
         if (!ingestPath.trim()) {
-            alert("Enter a file or directory path to ingest.")
+            toast("Enter a file or directory path to ingest.", "error")
             return
         }
         setUploading(true);
@@ -73,10 +76,10 @@ export function RagKnowledge() {
             const files = ingestPath.split(',').map((f: string) => f.trim()).filter(Boolean);
             await apiClient.rag.ingest(targetId, files, chunkSize, chunkOverlap)
             fetchCollections()
-            alert("Ingestion complete!")
+            toast("Ingestion complete!", "success")
             setIngestPath('')
         } catch (e) {
-            alert("Ingestion failed")
+            toast("Ingestion failed", "error")
         } finally {
             setUploading(false)
         }
@@ -126,7 +129,7 @@ export function RagKnowledge() {
                             <div className="flex items-center gap-2">
                                 <Brain className="w-3.5 h-3.5 text-blue-400" />
                                 <span className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Chunks</span>
-                                <span className="text-sm font-bold font-mono text-gray-200">{collections.reduce((sum: number, c: any) => sum + (c.chunks || 0), 0).toLocaleString()}</span>
+                                <span className="text-sm font-bold font-mono text-gray-200">{collections.reduce((sum: number, c: RagCollection) => sum + (c.chunks || 0), 0).toLocaleString()}</span>
                             </div>
                             <div className="w-px h-4 bg-white/10" />
                             <div className="flex items-center gap-2">

@@ -39,8 +39,8 @@ export function Deployment() {
                 setServerRunning(status.running)
                 setUptime(status.uptime_seconds ?? null)
                 setPid(status.pid ?? null)
-            } catch (e) {
-                console.error("Failed to check server status", e)
+            } catch {
+                // status check failed silently
             }
         }
         checkStatus()

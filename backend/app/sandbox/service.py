@@ -32,10 +32,7 @@ LANGUAGE_CONFIG: dict[str, tuple[str, object]] = {
 # Syntax-check-only commands per language
 # Each returns (file extension, command builder) where exit 0 = valid syntax
 SYNTAX_CHECK_CONFIG: dict[str, tuple[str, object]] = {
-    "python": (".py", lambda path: [
-        "python3", "-c",
-        f"import ast; ast.parse(open('{path}').read())",
-    ]),
+    "python": (".py", lambda path: ["python3", "-m", "py_compile", str(path)]),
     "javascript": (".js", lambda path: ["node", "--check", str(path)]),
     "js": (".js", lambda path: ["node", "--check", str(path)]),
     "typescript": (".ts", lambda path: ["npx", "tsc", "--noEmit", "--allowJs", str(path)]),

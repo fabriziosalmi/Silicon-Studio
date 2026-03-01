@@ -1,6 +1,6 @@
 import logging
 from fastapi import APIRouter, HTTPException
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from typing import List, Dict, Any
 
 from app.mcp.service import MCPService
@@ -11,16 +11,16 @@ service = MCPService()
 
 
 class AddServerRequest(BaseModel):
-    name: str
-    command: str
-    args: List[str] = []
+    name: str = Field(min_length=1, max_length=255)
+    command: str = Field(min_length=1, max_length=1024)
+    args: List[str] = Field(default=[], max_length=50)
     env: Dict[str, str] = {}
-    transport: str = "stdio"
+    transport: str = Field(default="stdio", max_length=20)
 
 
 class ExecuteToolRequest(BaseModel):
-    server_id: str
-    tool_name: str
+    server_id: str = Field(min_length=1, max_length=255)
+    tool_name: str = Field(min_length=1, max_length=255)
     tool_args: Dict[str, Any] = {}
 
 

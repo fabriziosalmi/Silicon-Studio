@@ -34,8 +34,8 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
             setListLoading(true)
             const list = await apiClient.conversations.list()
             setConversationList(list)
-        } catch (e) {
-            console.error('Failed to fetch conversations', e)
+        } catch {
+            // fetch failed silently
         } finally {
             setListLoading(false)
         }
@@ -47,8 +47,8 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
         try {
             const results = await apiClient.conversations.search(query)
             setConversationList(results)
-        } catch (e) {
-            console.error('Search failed', e)
+        } catch {
+            // search failed silently
         }
     }, [fetchConversations])
 
@@ -58,8 +58,8 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
             await apiClient.conversations.delete(id)
             if (activeConversationId === id) setActiveConversationId(null)
             fetchConversations()
-        } catch (e) {
-            console.error('Failed to delete conversation', e)
+        } catch {
+            // delete failed silently
         }
     }, [activeConversationId, fetchConversations])
 
@@ -68,8 +68,8 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
             await apiClient.conversations.update(id, { title: newTitle })
             setRenamingId(null)
             fetchConversations()
-        } catch (e) {
-            console.error('Failed to rename conversation', e)
+        } catch {
+            // rename failed silently
         }
     }, [fetchConversations])
 
@@ -77,8 +77,8 @@ export function ConversationProvider({ children }: { children: React.ReactNode }
         try {
             await apiClient.conversations.update(id, { pinned: !currentPinned })
             fetchConversations()
-        } catch (e) {
-            console.error('Failed to toggle pin', e)
+        } catch {
+            // toggle failed silently
         }
     }, [fetchConversations])
 

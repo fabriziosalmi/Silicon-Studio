@@ -216,8 +216,8 @@ export function ChatInterface() {
                         setActiveConversationId(conv.id);
                     }
                 }
-            } catch (e) {
-                console.error('Migration failed', e);
+            } catch {
+                // migration failed silently
             }
             localStorage.setItem(CONVERSATIONS_MIGRATED_KEY, 'true');
             fetchConversations();
@@ -236,8 +236,8 @@ export function ChatInterface() {
                     setAssessments({});
                     setMemoryMap(null);
                     localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(conv.messages || []));
-                } catch (e) {
-                    console.error('Failed to load conversation', e);
+                } catch {
+                    // load failed silently
                 }
             })();
         } else {
@@ -274,8 +274,8 @@ export function ChatInterface() {
                     }
                 }
                 fetchConversations();
-            } catch (e) {
-                console.error('Failed to save conversation', e);
+            } catch {
+                // save failed silently
             }
         }, 800);
         return () => { if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current); };
@@ -365,8 +365,8 @@ export function ChatInterface() {
             setActiveConversationId(branch.id);
             setMessages(branch.messages);
             localStorage.setItem(CHAT_STORAGE_KEY, JSON.stringify(branch.messages));
-        } catch (e) {
-            console.error('Failed to branch conversation', e);
+        } catch {
+            // branch failed silently
         }
     };
 
@@ -374,8 +374,8 @@ export function ChatInterface() {
         try {
             await apiClient.engine.stopChat();
             setIsGenerating(false);
-        } catch (e) {
-            console.error("Failed to stop generation", e);
+        } catch {
+            // stop failed silently
         }
     }
 
@@ -422,8 +422,8 @@ export function ChatInterface() {
                 if (ragResults.results.length > 0) {
                     systemContent += '\n\n[KNOWLEDGE BASE]\n' + ragResults.results.map(r => r.text).join('\n---\n');
                 }
-            } catch (e) {
-                console.warn('RAG query failed:', e);
+            } catch {
+                // RAG query failed silently
             }
         }
 
@@ -433,8 +433,8 @@ export function ChatInterface() {
                 if (searchResults.length > 0) {
                     systemContent += '\n\n[WEB SEARCH]\n' + searchResults.map(r => `${r.title}\n${r.snippet}\nSource: ${r.url}`).join('\n---\n');
                 }
-            } catch (e) {
-                console.warn('Web search failed:', e);
+            } catch {
+                // web search failed silently
             }
         }
 
@@ -537,7 +537,6 @@ export function ChatInterface() {
                 }
             }
         } catch (err: any) {
-            console.error(err)
             setMessages(prev => prev.map(m =>
                 m.id === assistantMsgId ? { ...m, content: `Error: ${err.message}` } : m
             ))
@@ -682,8 +681,7 @@ Return exactly: {"privacy":N,"fairness":N,"safety":N,"transparency":N,"ethics":N
             } else {
                 throw new Error('No valid JSON in response');
             }
-        } catch (e: any) {
-            console.error('Assessment failed:', e.message);
+        } catch {
             setAssessments(prev => {
                 const next = { ...prev };
                 delete next[msgIndex];
@@ -797,9 +795,8 @@ Improved response:`;
                 id: Date.now().toString(),
             };
             setMessages(prev => [...prev, improvedMsg]);
-        } catch (e: unknown) {
-            const msg = e instanceof Error ? e.message : String(e);
-            console.error('Self-critique failed:', msg);
+        } catch {
+            // self-critique failed silently
         } finally {
             setSelfCritiqueLoading(prev => ({ ...prev, [msgIndex]: false }));
         }
@@ -882,8 +879,8 @@ Return exactly this JSON structure (no other text):
                 setMemoryMap(memory);
                 return memory;
             }
-        } catch (e: any) {
-            console.error('Memory map build failed:', e.message);
+        } catch {
+            // memory map build failed silently
         } finally {
             setMemoryBuilding(false);
             memoryBuildingRef.current = false;
@@ -1771,7 +1768,7 @@ function ResponseActions({
                         <button
                             onClick={() => !disabled && setShowPerspectives(!showPerspectives)}
                             disabled={disabled}
-                            className={`p-1 rounded transition-colors ${disabled ? 'text-gray-700 cursor-not-allowed' : showPerspectives ? 'text-purple-400 bg-purple-500/10' : 'text-gray-600 hover:text-purple-400 hover:bg-purple-500/5'}`}
+                            className={`p-1 rounded transition-colors ${disabled ? 'text-gray-700 cursor-not-allowed' : showPerspectives ? 'text-blue-400 bg-blue-500/10' : 'text-gray-600 hover:text-blue-400 hover:bg-blue-500/5'}`}
                             title={disabled ? 'Wait for response...' : "Change Perspective"}
                         >
                             <Eye className="w-3 h-3" />
@@ -1807,7 +1804,7 @@ function ResponseActions({
                     <button
                         onClick={onBranch}
                         disabled={disabled}
-                        className={`p-1 rounded transition-colors ${disabled ? 'text-gray-700 cursor-not-allowed' : 'text-gray-600 hover:text-purple-400 hover:bg-purple-500/5'}`}
+                        className={`p-1 rounded transition-colors ${disabled ? 'text-gray-700 cursor-not-allowed' : 'text-gray-600 hover:text-blue-400 hover:bg-blue-500/5'}`}
                         title={disabled ? 'Wait for response...' : "Branch from here"}
                     >
                         <GitFork className="w-3 h-3" />
@@ -2174,8 +2171,8 @@ function CodeBlock({
             const updated = [...base, { code: result, action, timestamp: Date.now() }];
             setVersions(updated);
             setVersionIndex(updated.length - 1);
-        } catch (e: any) {
-            console.error('Rewrite failed:', e.message);
+        } catch {
+            // rewrite failed silently
         } finally {
             setRewriting(false);
         }
