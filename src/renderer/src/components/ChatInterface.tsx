@@ -779,19 +779,21 @@ Return exactly this JSON structure (no other text):
                                 <Download className="w-3.5 h-3.5" />
                                 Export
                             </button>
-                            <div className="hidden group-hover/export:block absolute top-full left-0 mt-1 bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl py-1 z-50 min-w-[110px]">
-                                <button
-                                    onClick={() => handleExport('md')}
-                                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
-                                >
-                                    Markdown
-                                </button>
-                                <button
-                                    onClick={() => handleExport('json')}
-                                    className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
-                                >
-                                    JSON
-                                </button>
+                            <div className="hidden group-hover/export:block absolute top-full left-0 pt-1 z-50">
+                                <div className="bg-[#1a1a1a] border border-white/10 rounded-lg shadow-xl py-1 min-w-[110px]">
+                                    <button
+                                        onClick={() => handleExport('md')}
+                                        className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                                    >
+                                        Markdown
+                                    </button>
+                                    <button
+                                        onClick={() => handleExport('json')}
+                                        className="flex items-center gap-2 w-full px-3 py-1.5 text-xs text-gray-400 hover:text-white hover:bg-white/5 transition-colors"
+                                    >
+                                        JSON
+                                    </button>
+                                </div>
                             </div>
                         </div>
                     )}
@@ -1344,6 +1346,7 @@ function ResponseActions({
     const isOn = (key: string) => enabledActions?.[key] !== false;
     const [showPerspectives, setShowPerspectives] = useState(false);
     const [showAssessment, setShowAssessment] = useState(false);
+    const [promptDetailsOpen, setPromptDetailsOpen] = useState(false);
     const prevAssessmentRef = useRef(assessment);
     const perspRef = useRef<HTMLDivElement>(null);
 
@@ -1375,7 +1378,10 @@ function ResponseActions({
     ];
     const enabledPerspectives = perspectives.filter(p => isOn(p.key));
 
-    const hasVisiblePanel = showAssessment && assessment && assessment !== 'loading';
+    const hasVisiblePanel =
+        (showAssessment && assessment && assessment !== 'loading') ||
+        (showPrompt && promptDetailsOpen) ||
+        showPerspectives;
 
     return (
         <div className={`mt-2 transition-opacity ${hasVisiblePanel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
@@ -1496,7 +1502,7 @@ function ResponseActions({
             )}
             {/* Show Prompt — what was actually sent */}
             {showPrompt && (
-                <details className="mt-1.5">
+                <details className="mt-1.5" onToggle={(e) => setPromptDetailsOpen(e.currentTarget.open)}>
                     <summary className="flex items-center gap-1 cursor-pointer text-[10px] text-gray-600 hover:text-gray-400 transition-colors select-none list-none">
                         <ChevronRight className="w-2.5 h-2.5 chevron-rotate transition-transform" />
                         <span>View raw response</span>
@@ -1837,7 +1843,7 @@ function CodeBlock({
                             onClick={() => handleInlineRewrite(a.key)}
                             title={rewriting ? 'Rewriting...' : a.label}
                             disabled={rewriting}
-                            className={`p-1 rounded text-gray-600 hover:text-gray-300 hover:bg-white/5 transition-colors opacity-0 group-hover/code:opacity-100 ${rewriting ? 'opacity-30 cursor-wait' : ''}`}
+                            className={`p-1 rounded text-gray-600 hover:text-gray-300 hover:bg-white/5 transition-colors ${rewriting ? 'opacity-30 cursor-wait' : 'opacity-0 group-hover/code:opacity-100'}`}
                         >
                             {a.icon}
                         </button>
