@@ -8,13 +8,15 @@
 ![Platform: macOS](https://img.shields.io/badge/Platform-macOS_(Apple_Silicon)-black)
 ![Engine: MLX](https://img.shields.io/badge/Engine-MLX-blue)
 
+[Download DMG](https://github.com/fabriziosalmi/silicondev/releases/latest) · [Documentation](https://fabriziosalmi.github.io/silicondev/) · [Report Bug](https://github.com/fabriziosalmi/silicondev/issues)
+
 </div>
 
 ---
 
-**SiliconDev** is an open-source desktop app for local LLM fine-tuning, inference, and tooling on Apple Silicon. Built on [MLX](https://github.com/ml-explore/mlx), it provides a unified interface for data preparation, model management, fine-tuning, chat, RAG, MCP integration, and more.
+**SiliconDev** is an open-source desktop app for local LLM fine-tuning, inference, and tooling on Apple Silicon. Built on [MLX](https://github.com/ml-explore/mlx), it provides a unified interface for data preparation, model management, fine-tuning, chat, RAG, MCP integration, and more. Everything runs on-device — no cloud, no API keys, no data leaves your machine.
 
-[![Forked from Silicon-Studio](https://img.shields.io/badge/Forked_from-Silicon--Studio-blue)](https://github.com/rileycleavenger/Silicon-Studio)
+Based on [Silicon-Studio](https://github.com/rileycleavenger/Silicon-Studio) by [Riley Cleavenger](https://github.com/rileycleavenger).
 
 ## Features
 
@@ -110,4 +112,6 @@ npm run dev
 
 MIT License. See [LICENSE](LICENSE) for details.
 
-Original project: [Silicon-Studio](https://github.com/rileycleavenger/Silicon-Studio) by Riley Cleavenger.
+## Attribution
+
+Based on [Silicon-Studio](https://github.com/rileycleavenger/Silicon-Studio) by [Riley Cleavenger](https://github.com/rileycleavenger).
