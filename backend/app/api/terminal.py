@@ -3,12 +3,15 @@
 import json
 import uuid
 import logging
+import time
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
 
 from app.agents.nanocore.types import TerminalRequest, DiffDecision
 from app.agents.nanocore.supervisor import SupervisorAgent
+from app.agents.nanocore.tools import run_bash
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +19,37 @@ router = APIRouter()
 
 # Active sessions keyed by session_id
 _active_sessions: dict[str, SupervisorAgent] = {}
+
+
+class ExecRequest(BaseModel):
+    command: str = Field(min_length=1, max_length=4096)
+    timeout: int = Field(default=60, ge=1, le=300)
+
+
+@router.post("/exec")
+async def exec_command(request: ExecRequest):
+    """Execute a shell command directly via PTY. Returns SSE stream."""
+    call_id = str(uuid.uuid4())[:8]
+    t0 = time.time()
+
+    async def event_generator():
+        yield f"data: {json.dumps({'event': 'tool_start', 'data': {'tool': 'run_bash', 'args': {'command': request.command}, 'call_id': call_id}})}\n\n"
+
+        exit_code = 0
+        try:
+            async for stream, text in run_bash(request.command, timeout=request.timeout):
+                yield f"data: {json.dumps({'event': 'tool_log', 'data': {'call_id': call_id, 'stream': stream, 'text': text}})}\n\n"
+                if stream == "stderr" and "Blocked:" in text:
+                    exit_code = 1
+        except Exception as e:
+            yield f"data: {json.dumps({'event': 'error', 'data': {'message': str(e)}})}\n\n"
+            exit_code = 1
+
+        elapsed = int((time.time() - t0) * 1000)
+        yield f"data: {json.dumps({'event': 'tool_done', 'data': {'call_id': call_id, 'exit_code': exit_code}})}\n\n"
+        yield f"data: {json.dumps({'event': 'done', 'data': {'total_tokens': 0, 'total_time_ms': elapsed}})}\n\n"
+
+    return StreamingResponse(event_generator(), media_type="text/event-stream")
 
 
 @router.post("/run")

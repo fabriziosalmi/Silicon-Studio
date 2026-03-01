@@ -696,6 +696,12 @@ export const apiClient = {
                 body: { prompt, model_id: modelId, max_iterations: opts?.maxIterations ?? 10, temperature: opts?.temperature ?? 0.7 },
             }
         },
+        execUrl: (command: string, timeout?: number) => {
+            return {
+                url: `${API_BASE}/api/terminal/exec`,
+                body: { command, timeout: timeout ?? 60 },
+            }
+        },
         decideDiff: async (sessionId: string, callId: string, approved: boolean, reason: string = ''): Promise<void> => {
             const res = await fetch(`${API_BASE}/api/terminal/diff/decide`, {
                 method: 'POST',
