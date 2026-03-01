@@ -1344,7 +1344,16 @@ function ResponseActions({
     const isOn = (key: string) => enabledActions?.[key] !== false;
     const [showPerspectives, setShowPerspectives] = useState(false);
     const [showAssessment, setShowAssessment] = useState(false);
+    const prevAssessmentRef = useRef(assessment);
     const perspRef = useRef<HTMLDivElement>(null);
+
+    // Auto-show panel when assessment finishes loading
+    useEffect(() => {
+        if (prevAssessmentRef.current === 'loading' && assessment && assessment !== 'loading') {
+            setShowAssessment(true);
+        }
+        prevAssessmentRef.current = assessment;
+    }, [assessment]);
 
     // Close perspectives dropdown on outside click
     useEffect(() => {
@@ -1366,8 +1375,10 @@ function ResponseActions({
     ];
     const enabledPerspectives = perspectives.filter(p => isOn(p.key));
 
+    const hasVisiblePanel = showAssessment && assessment && assessment !== 'loading';
+
     return (
-        <div className="mt-2 opacity-0 group-hover:opacity-100 transition-opacity">
+        <div className={`mt-2 transition-opacity ${hasVisiblePanel ? 'opacity-100' : 'opacity-0 group-hover:opacity-100'}`}>
             <div className="flex items-center gap-0.5">
                 {/* Tone & length actions */}
                 {[
