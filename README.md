@@ -18,6 +18,9 @@
 
 Based on [Silicon-Studio](https://github.com/rileycleavenger/Silicon-Studio) by [Riley Cleavenger](https://github.com/rileycleavenger).
 
+![SiliconDev Demo](https://github.com/fabriziosalmi/silicondev/raw/main/assets/demo.gif)
+
+
 ## Features
 
 ### Native Apple Silicon

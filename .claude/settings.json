@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm init -y)",
+      "Bash(curl -s http://localhost:8000/health)",
+      "Bash(bash /tmp/make-gif.sh)"
+    ]
+  }
+}
