@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 import { apiClient, cleanModelName } from '../api/client'
 import type { SandboxResult, SyntaxCheckResult, SelfAssessment, ConversationMemory } from '../api/client'
 import { PageHeader } from './ui/PageHeader'
-import { Settings2, SlidersHorizontal, Cpu, Copy, Check, ChevronRight, ChevronLeft, Square, ArrowUp, Wand2, Shield, Zap, FileText, TestTube2, Expand, Shrink, Languages, Briefcase, MessageCircle, GraduationCap, Scale, Eye, EyeOff, User, Baby, FlaskConical, Feather, Plus, Download, GitFork, Play, Loader2, CircleCheck, CircleX, ShieldCheck, Brain, Globe, RefreshCcw, Database, Bot, Search, X } from 'lucide-react'
+import { Settings2, Cpu, Copy, Check, ChevronRight, ChevronLeft, Square, ArrowUp, Wand2, Shield, Zap, FileText, TestTube2, Expand, Shrink, Languages, Briefcase, MessageCircle, GraduationCap, Scale, Eye, EyeOff, User, Baby, FlaskConical, Feather, Plus, Download, GitFork, Play, Loader2, CircleCheck, CircleX, ShieldCheck, Brain, Globe, RefreshCcw, Database, Bot, Search, X, ChevronUp, ChevronDown, ChevronsLeft, ChevronsRight } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -42,7 +42,14 @@ export function ChatInterface() {
     const textareaRef = useRef<HTMLTextAreaElement>(null)
 
 
-    const [showSettings, setShowSettings] = useState(false)
+    const [paramsExpanded, setParamsExpanded] = useState(() => localStorage.getItem('paramsExpanded') === 'true')
+    const toggleParams = () => {
+        setParamsExpanded(prev => {
+            const next = !prev;
+            localStorage.setItem('paramsExpanded', String(next));
+            return next;
+        });
+    }
     const [settings, setSettings] = useState(() => {
         const allActions = [
             'longer', 'shorter', 'formal', 'casual', 'technical', 'translate',
@@ -1023,8 +1030,8 @@ Return exactly this JSON structure (no other text):
                         </button>
                     )}
                     <button
-                        onClick={() => setShowSettings(!showSettings)}
-                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${showSettings ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
+                        onClick={toggleParams}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-colors ${paramsExpanded ? 'bg-white/10 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'}`}
                     >
                         <Settings2 className="w-3.5 h-3.5" />
                         Parameters
@@ -1032,7 +1039,7 @@ Return exactly this JSON structure (no other text):
                 </div>
             </PageHeader>
 
-            <div className="flex-1 flex gap-4 overflow-hidden min-h-0 pr-4">
+            <div className="flex-1 flex overflow-hidden min-h-0">
                 {/* Main Chat Area */}
                 <div className="flex-1 flex flex-col overflow-hidden relative">
 
@@ -1058,13 +1065,41 @@ Return exactly this JSON structure (no other text):
                                 className="flex-1 bg-transparent text-sm text-white placeholder-gray-600 outline-none"
                             />
                             {searchQuery && (
-                                <span className="text-[10px] text-gray-500 tabular-nums shrink-0">
-                                    {searchMatches.length > 0
-                                        ? `${searchMatchIndex + 1}/${searchMatches.length}`
-                                        : 'No results'}
-                                </span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                    <span className="text-[10px] text-gray-500 tabular-nums">
+                                        {searchMatches.length > 0
+                                            ? `${searchMatchIndex + 1}/${searchMatches.length}`
+                                            : 'No results'}
+                                    </span>
+                                    {searchMatches.length > 1 && (
+                                        <>
+                                            <button
+                                                onClick={() => {
+                                                    const prev = (searchMatchIndex - 1 + searchMatches.length) % searchMatches.length;
+                                                    setSearchMatchIndex(prev);
+                                                    document.getElementById(`msg-${searchMatches[prev]}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                }}
+                                                className="p-0.5 rounded text-gray-500 hover:text-white hover:bg-white/10 transition-colors"
+                                                title="Previous match (Shift+Enter)"
+                                            >
+                                                <ChevronUp size={14} />
+                                            </button>
+                                            <button
+                                                onClick={() => {
+                                                    const next = (searchMatchIndex + 1) % searchMatches.length;
+                                                    setSearchMatchIndex(next);
+                                                    document.getElementById(`msg-${searchMatches[next]}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                                                }}
+                                                className="p-0.5 rounded text-gray-500 hover:text-white hover:bg-white/10 transition-colors"
+                                                title="Next match (Enter)"
+                                            >
+                                                <ChevronDown size={14} />
+                                            </button>
+                                        </>
+                                    )}
+                                </div>
                             )}
-                            <button onClick={toggleSearch} className="text-gray-500 hover:text-white transition-colors shrink-0" title="Close search">
+                            <button onClick={toggleSearch} className="text-gray-500 hover:text-white transition-colors shrink-0" title="Close search (Esc)">
                                 <X size={14} />
                             </button>
                         </div>
@@ -1313,319 +1348,304 @@ Return exactly this JSON structure (no other text):
                     </div>
                 </div>
 
-                {/* Parameters Sidebar */}
-                {showSettings && (
-                    <div className="w-72 border-l border-white/5 flex flex-col shrink-0 overflow-y-auto bg-black/40 px-4 pt-4">
-                        <div className="flex items-center gap-2 mb-5 pt-1">
-                            <SlidersHorizontal className="w-3.5 h-3.5 text-gray-500" />
-                            <h3 className="text-xs font-medium text-gray-400">Parameters</h3>
-                        </div>
-
-                        <div className="space-y-5">
-                            <ParameterSlider
-                                label="Temperature"
-                                value={settings.temperature}
-                                min={0} max={2} step={0.05}
-                                format={(v) => v.toFixed(2)}
-                                onChange={(v) => setSettings({ ...settings, temperature: v })}
-                            />
-                            <ParameterSlider
-                                label="Max Tokens"
-                                value={settings.maxTokens}
-                                min={64} max={activeModel?.context_window || 32768} step={64}
-                                format={(v) => v.toString()}
-                                onChange={(v) => setSettings({ ...settings, maxTokens: v })}
-                            />
-
-                            <div className="border-t border-white/5 pt-5">
-                                <ParameterSlider
-                                    label="Top-P"
-                                    value={settings.topP}
-                                    min={0} max={1} step={0.05}
-                                    format={(v) => v.toFixed(2)}
-                                    onChange={(v) => setSettings({ ...settings, topP: v })}
-                                />
-                            </div>
-                            <ParameterSlider
-                                label="Repetition Penalty"
-                                value={settings.repetitionPenalty}
-                                min={0.5} max={2} step={0.05}
-                                format={(v) => v.toFixed(2)}
-                                onChange={(v) => setSettings({ ...settings, repetitionPenalty: v })}
-                            />
-
-                            <div className="border-t border-white/5 pt-5">
-                                <label className="text-xs text-gray-500 block mb-2">Reasoning</label>
-                                <div className="flex gap-1">
-                                    {(['off', 'auto', 'low', 'high'] as const).map(mode => (
-                                        <button
-                                            key={mode}
-                                            onClick={() => setSettings({ ...settings, reasoningMode: mode })}
-                                            className={`flex-1 px-2 py-1.5 rounded text-[10px] font-medium transition-colors ${
-                                                settings.reasoningMode === mode
-                                                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                                    : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
-                                            }`}
-                                        >
-                                            {mode === 'off' ? 'Off' : mode === 'auto' ? 'Auto' : mode === 'low' ? 'Low' : 'High'}
-                                        </button>
-                                    ))}
-                                </div>
-                                <p className="text-[10px] text-gray-600 mt-1.5">
-                                    {settings.reasoningMode === 'off' && 'No reasoning instructions added.'}
-                                    {settings.reasoningMode === 'auto' && 'Let the model decide. Best for reasoning models.'}
-                                    {settings.reasoningMode === 'low' && 'Brief reasoning before answering.'}
-                                    {settings.reasoningMode === 'high' && 'Deep step-by-step reasoning.'}
-                                </p>
-                            </div>
-
-                            <div className="border-t border-white/5 pt-5">
-                                <label className="text-xs text-gray-500 block mb-2">Translate Language</label>
-                                <select
-                                    title="Translate Language"
-                                    value={settings.translateLanguage}
-                                    onChange={(e) => setSettings({ ...settings, translateLanguage: e.target.value })}
-                                    className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 outline-none focus:border-white/20 transition-colors appearance-none cursor-pointer"
-                                >
-                                    <option value="">Auto-detect (browser)</option>
-                                    {['English', 'Italian', 'French', 'German', 'Spanish', 'Portuguese', 'Japanese', 'Chinese', 'Korean', 'Arabic', 'Hindi', 'Russian', 'Dutch', 'Swedish', 'Polish', 'Turkish'].map(lang => (
-                                        <option key={lang} value={lang}>{lang}</option>
-                                    ))}
-                                </select>
-                                <p className="text-[10px] text-gray-600 mt-1.5">
-                                    Target language for the Translate action.
-                                </p>
-                            </div>
-
-                            <div className="border-t border-white/5 pt-5">
-                                <div className="flex items-center justify-between">
-                                    <label className="text-xs text-gray-500">Show Prompt</label>
-                                    <button
-                                        onClick={() => setSettings({ ...settings, showPrompt: !settings.showPrompt })}
-                                        className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                                            settings.showPrompt
-                                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                                : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
-                                        }`}
-                                    >
-                                        {settings.showPrompt ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
-                                        {settings.showPrompt ? 'On' : 'Off'}
-                                    </button>
-                                </div>
-                                <p className="text-[10px] text-gray-600 mt-1.5">
-                                    Show raw content behind AI responses.
-                                </p>
-                            </div>
-
-                            <div className="border-t border-white/5 pt-5">
-                                <div className="flex items-center justify-between mb-2">
-                                    <label className="text-xs text-gray-500">Syntax Check</label>
-                                    <button
-                                        onClick={() => setSettings({ ...settings, syntaxCheck: !settings.syntaxCheck })}
-                                        className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                                            settings.syntaxCheck
-                                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                                : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
-                                        }`}
-                                    >
-                                        {settings.syntaxCheck ? <CircleCheck className="w-3 h-3" /> : <CircleX className="w-3 h-3" />}
-                                        {settings.syntaxCheck ? 'On' : 'Off'}
-                                    </button>
-                                </div>
-                                <p className="text-[10px] text-gray-600 mb-3">
-                                    Auto-validate code snippets after each response.
-                                </p>
-                                {settings.syntaxCheck && (
-                                    <div className="flex items-center justify-between">
-                                        <label className="text-xs text-gray-500">Auto-fix Syntax</label>
-                                        <button
-                                            onClick={() => setSettings({ ...settings, autoFixSyntax: !settings.autoFixSyntax })}
-                                            className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                                                settings.autoFixSyntax
-                                                    ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                                    : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
-                                            }`}
-                                        >
-                                            {settings.autoFixSyntax ? 'On' : 'Off'}
-                                        </button>
-                                    </div>
-                                )}
-                                {settings.syntaxCheck && settings.autoFixSyntax && (
-                                    <p className="text-[10px] text-gray-600 mt-1.5">
-                                        Show "Fix syntax" button on invalid snippets.
-                                    </p>
-                                )}
-                            </div>
-
-                            <div className="border-t border-white/5 pt-5">
-                                <div className="flex items-center justify-between mb-2">
-                                    <label className="text-xs text-gray-500">Memory Map</label>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSettings({ ...settings, memoryMapEnabled: !settings.memoryMapEnabled })}
-                                        className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                                            settings.memoryMapEnabled
-                                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                                : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
-                                        }`}
-                                    >
-                                        <Brain className="w-3 h-3" />
-                                        {settings.memoryMapEnabled ? 'On' : 'Off'}
-                                    </button>
-                                </div>
-                                <p className="text-[10px] text-gray-600 mb-3">
-                                    Auto-summarize conversation context every N messages.
-                                </p>
-                                {settings.memoryMapEnabled && (
+                {/* Parameters Sidebar — mirrors left sidebar style */}
+                <div className={`${paramsExpanded ? 'w-72' : 'w-14'} bg-black/40 flex flex-col shrink-0 border-l border-white/5 transition-all duration-200 overflow-hidden`}>
+                    {paramsExpanded ? (
+                        <>
+                            <nav className="flex-1 overflow-y-auto px-4 pt-6">
+                                <div className="px-0 mb-4 text-[10px] font-bold tracking-wide text-gray-500 uppercase">Parameters</div>
+                                <div className="space-y-5">
                                     <ParameterSlider
-                                        label="Build every N messages"
-                                        value={settings.memoryInterval}
-                                        min={3} max={20} step={1}
-                                        format={(v) => v.toString()}
-                                        onChange={(v) => setSettings({ ...settings, memoryInterval: v })}
+                                        label="Temperature"
+                                        value={settings.temperature}
+                                        min={0} max={2} step={0.05}
+                                        format={(v) => v.toFixed(2)}
+                                        onChange={(v) => setSettings({ ...settings, temperature: v })}
                                     />
-                                )}
-                            </div>
+                                    <ParameterSlider
+                                        label="Max Tokens"
+                                        value={settings.maxTokens}
+                                        min={64} max={activeModel?.context_window || 32768} step={64}
+                                        format={(v) => v.toString()}
+                                        onChange={(v) => setSettings({ ...settings, maxTokens: v })}
+                                    />
+                                    <ParameterSlider
+                                        label="Top-P"
+                                        value={settings.topP}
+                                        min={0} max={1} step={0.05}
+                                        format={(v) => v.toFixed(2)}
+                                        onChange={(v) => setSettings({ ...settings, topP: v })}
+                                    />
+                                    <ParameterSlider
+                                        label="Repetition Penalty"
+                                        value={settings.repetitionPenalty}
+                                        min={0.5} max={2} step={0.05}
+                                        format={(v) => v.toFixed(2)}
+                                        onChange={(v) => setSettings({ ...settings, repetitionPenalty: v })}
+                                    />
 
-                            <div className="border-t border-white/5 pt-5">
-                                <div className="flex items-center justify-between mb-2">
-                                    <label className="text-xs text-gray-500">PII Redaction</label>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSettings({ ...settings, piiRedaction: !settings.piiRedaction })}
-                                        className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                                            settings.piiRedaction
-                                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                                : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
-                                        }`}
-                                    >
-                                        <Shield className="w-3 h-3" />
-                                        {settings.piiRedaction ? 'On' : 'Off'}
-                                    </button>
+                                    <div className="border-t border-white/5 pt-5">
+                                        <div className="px-0 mb-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">Reasoning</div>
+                                        <div className="flex gap-1">
+                                            {(['off', 'auto', 'low', 'high'] as const).map(mode => (
+                                                <button
+                                                    key={mode}
+                                                    onClick={() => setSettings({ ...settings, reasoningMode: mode })}
+                                                    className={`flex-1 px-2 py-1.5 rounded text-[10px] font-medium transition-colors ${
+                                                        settings.reasoningMode === mode
+                                                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                                            : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
+                                                    }`}
+                                                >
+                                                    {mode === 'off' ? 'Off' : mode === 'auto' ? 'Auto' : mode === 'low' ? 'Low' : 'High'}
+                                                </button>
+                                            ))}
+                                        </div>
+                                        <p className="text-[10px] text-gray-600 mt-1.5">
+                                            {settings.reasoningMode === 'off' && 'No reasoning instructions added.'}
+                                            {settings.reasoningMode === 'auto' && 'Let the model decide. Best for reasoning models.'}
+                                            {settings.reasoningMode === 'low' && 'Brief reasoning before answering.'}
+                                            {settings.reasoningMode === 'high' && 'Deep step-by-step reasoning.'}
+                                        </p>
+                                    </div>
+
+                                    <div className="border-t border-white/5 pt-5">
+                                        <div className="px-0 mb-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">Language</div>
+                                        <select
+                                            title="Translate Language"
+                                            value={settings.translateLanguage}
+                                            onChange={(e) => setSettings({ ...settings, translateLanguage: e.target.value })}
+                                            className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-3 py-1.5 text-xs text-gray-300 outline-none focus:border-white/20 transition-colors appearance-none cursor-pointer"
+                                        >
+                                            <option value="">Auto-detect (browser)</option>
+                                            {['English', 'Italian', 'French', 'German', 'Spanish', 'Portuguese', 'Japanese', 'Chinese', 'Korean', 'Arabic', 'Hindi', 'Russian', 'Dutch', 'Swedish', 'Polish', 'Turkish'].map(lang => (
+                                                <option key={lang} value={lang}>{lang}</option>
+                                            ))}
+                                        </select>
+                                        <p className="text-[10px] text-gray-600 mt-1.5">Target language for the Translate action.</p>
+                                    </div>
+
+                                    <div className="border-t border-white/5 pt-5">
+                                        <div className="px-0 mb-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">Toggles</div>
+                                        <div className="space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-xs text-gray-400">Show Prompt</label>
+                                                <button
+                                                    onClick={() => setSettings({ ...settings, showPrompt: !settings.showPrompt })}
+                                                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+                                                        settings.showPrompt
+                                                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                                            : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
+                                                    }`}
+                                                >
+                                                    {settings.showPrompt ? <Eye className="w-3 h-3" /> : <EyeOff className="w-3 h-3" />}
+                                                    {settings.showPrompt ? 'On' : 'Off'}
+                                                </button>
+                                            </div>
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-xs text-gray-400">Syntax Check</label>
+                                                <button
+                                                    onClick={() => setSettings({ ...settings, syntaxCheck: !settings.syntaxCheck })}
+                                                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+                                                        settings.syntaxCheck
+                                                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                                            : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
+                                                    }`}
+                                                >
+                                                    {settings.syntaxCheck ? <CircleCheck className="w-3 h-3" /> : <CircleX className="w-3 h-3" />}
+                                                    {settings.syntaxCheck ? 'On' : 'Off'}
+                                                </button>
+                                            </div>
+                                            {settings.syntaxCheck && (
+                                                <div className="flex items-center justify-between pl-3">
+                                                    <label className="text-xs text-gray-500">Auto-fix</label>
+                                                    <button
+                                                        onClick={() => setSettings({ ...settings, autoFixSyntax: !settings.autoFixSyntax })}
+                                                        className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+                                                            settings.autoFixSyntax
+                                                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                                                : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
+                                                        }`}
+                                                    >
+                                                        {settings.autoFixSyntax ? 'On' : 'Off'}
+                                                    </button>
+                                                </div>
+                                            )}
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-xs text-gray-400">Memory Map</label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSettings({ ...settings, memoryMapEnabled: !settings.memoryMapEnabled })}
+                                                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+                                                        settings.memoryMapEnabled
+                                                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                                            : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
+                                                    }`}
+                                                >
+                                                    <Brain className="w-3 h-3" />
+                                                    {settings.memoryMapEnabled ? 'On' : 'Off'}
+                                                </button>
+                                            </div>
+                                            {settings.memoryMapEnabled && (
+                                                <div className="pl-3">
+                                                    <ParameterSlider
+                                                        label="Build every N messages"
+                                                        value={settings.memoryInterval}
+                                                        min={3} max={20} step={1}
+                                                        format={(v) => v.toString()}
+                                                        onChange={(v) => setSettings({ ...settings, memoryInterval: v })}
+                                                    />
+                                                </div>
+                                            )}
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-xs text-gray-400">PII Redaction</label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSettings({ ...settings, piiRedaction: !settings.piiRedaction })}
+                                                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+                                                        settings.piiRedaction
+                                                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                                            : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
+                                                    }`}
+                                                >
+                                                    <Shield className="w-3 h-3" />
+                                                    {settings.piiRedaction ? 'On' : 'Off'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="border-t border-white/5 pt-5">
+                                        <div className="px-0 mb-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">Context</div>
+                                        <div className="space-y-3">
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-xs text-gray-400">RAG Knowledge</label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const next = !settings.ragEnabled;
+                                                        setSettings({ ...settings, ragEnabled: next });
+                                                        if (next && ragCollections.length === 0) fetchRagCollections();
+                                                    }}
+                                                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+                                                        settings.ragEnabled
+                                                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                                            : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
+                                                    }`}
+                                                >
+                                                    <Database className="w-3 h-3" />
+                                                    {settings.ragEnabled ? 'On' : 'Off'}
+                                                </button>
+                                            </div>
+                                            {settings.ragEnabled && (
+                                                <select
+                                                    title="RAG collection"
+                                                    value={settings.ragCollectionId}
+                                                    onChange={(e) => setSettings({ ...settings, ragCollectionId: e.target.value })}
+                                                    className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-blue-500/50"
+                                                >
+                                                    <option value="">Select collection...</option>
+                                                    {ragCollections.map(c => (
+                                                        <option key={c.id} value={c.id}>{c.name} ({c.chunks} chunks)</option>
+                                                    ))}
+                                                </select>
+                                            )}
+                                            <div className="flex items-center justify-between">
+                                                <label className="text-xs text-gray-400">Web Search</label>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setSettings({ ...settings, webSearchEnabled: !settings.webSearchEnabled })}
+                                                    className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+                                                        settings.webSearchEnabled
+                                                            ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                                            : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
+                                                    }`}
+                                                >
+                                                    <Globe className="w-3 h-3" />
+                                                    {settings.webSearchEnabled ? 'On' : 'Off'}
+                                                </button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="border-t border-white/5 pt-5">
+                                        <div className="px-0 mb-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">Actions</div>
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {[
+                                                { key: 'longer', label: 'Longer' },
+                                                { key: 'shorter', label: 'Shorter' },
+                                                { key: 'formal', label: 'Formal' },
+                                                { key: 'casual', label: 'Casual' },
+                                                { key: 'technical', label: 'Technical' },
+                                                { key: 'translate', label: 'Translate' },
+                                                { key: 'devil', label: "Devil's Advocate" },
+                                                { key: 'perspective_ceo', label: 'CEO' },
+                                                { key: 'perspective_child', label: 'ELI8' },
+                                                { key: 'perspective_scientist', label: 'Scientist' },
+                                                { key: 'perspective_poet', label: 'Poet' },
+                                                { key: 'improve', label: 'Improve' },
+                                                { key: 'secure', label: 'Secure' },
+                                                { key: 'faster', label: 'Faster' },
+                                                { key: 'docs', label: 'Docs' },
+                                                { key: 'tests', label: 'Tests' },
+                                                { key: 'selfAssess', label: 'Ethical' },
+                                                { key: 'selfCritique', label: 'Self-Critique' },
+                                            ].map(a => {
+                                                const enabled = settings.enabledActions?.[a.key] !== false;
+                                                return (
+                                                    <button
+                                                        key={a.key}
+                                                        onClick={() => setSettings({
+                                                            ...settings,
+                                                            enabledActions: { ...settings.enabledActions, [a.key]: !enabled },
+                                                        })}
+                                                        className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
+                                                            enabled
+                                                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
+                                                                : 'bg-white/[0.03] text-gray-600 border border-white/5 hover:text-gray-400'
+                                                        }`}
+                                                    >
+                                                        {a.label}
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    <div className="border-t border-white/5 pt-5 pb-4">
+                                        <div className="px-0 mb-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">System Prompt</div>
+                                        <textarea
+                                            value={settings.systemPrompt}
+                                            onChange={(e) => setSettings({ ...settings, systemPrompt: e.target.value })}
+                                            className="w-full bg-white/[0.03] border border-white/10 rounded-lg p-3 text-xs text-gray-300 h-28 resize-none outline-none focus:border-white/20 transition-colors leading-relaxed"
+                                            placeholder="Set model behavior..."
+                                        />
+                                    </div>
                                 </div>
-                                <p className="text-[10px] text-gray-600">
-                                    Replace emails, phones, IPs, cards with tokens.
-                                </p>
-                            </div>
+                            </nav>
 
-                            <div className="border-t border-white/5 pt-5">
-                                <div className="flex items-center justify-between mb-2">
-                                    <label className="text-xs text-gray-500">RAG Knowledge</label>
-                                    <button
-                                        type="button"
-                                        onClick={() => {
-                                            const next = !settings.ragEnabled;
-                                            setSettings({ ...settings, ragEnabled: next });
-                                            if (next && ragCollections.length === 0) fetchRagCollections();
-                                        }}
-                                        className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                                            settings.ragEnabled
-                                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                                : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
-                                        }`}
-                                    >
-                                        <Database className="w-3 h-3" />
-                                        {settings.ragEnabled ? 'On' : 'Off'}
-                                    </button>
-                                </div>
-                                {settings.ragEnabled && (
-                                    <select
-                                        title="RAG collection"
-                                        value={settings.ragCollectionId}
-                                        onChange={(e) => setSettings({ ...settings, ragCollectionId: e.target.value })}
-                                        className="w-full bg-white/[0.03] border border-white/10 rounded-lg px-2 py-1.5 text-xs text-white outline-none focus:border-blue-500/50 mt-1"
-                                    >
-                                        <option value="">Select collection...</option>
-                                        {ragCollections.map(c => (
-                                            <option key={c.id} value={c.id}>{c.name} ({c.chunks} chunks)</option>
-                                        ))}
-                                    </select>
-                                )}
-                                <p className="text-[10px] text-gray-600 mt-1">
-                                    Inject relevant knowledge into context.
-                                </p>
-                            </div>
-
-                            <div className="border-t border-white/5 pt-5">
-                                <div className="flex items-center justify-between mb-2">
-                                    <label className="text-xs text-gray-500">Web Search</label>
-                                    <button
-                                        type="button"
-                                        onClick={() => setSettings({ ...settings, webSearchEnabled: !settings.webSearchEnabled })}
-                                        className={`flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                                            settings.webSearchEnabled
-                                                ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                                : 'bg-white/[0.03] text-gray-500 border border-white/5 hover:text-gray-400 hover:bg-white/5'
-                                        }`}
-                                    >
-                                        <Globe className="w-3 h-3" />
-                                        {settings.webSearchEnabled ? 'On' : 'Off'}
-                                    </button>
-                                </div>
-                                <p className="text-[10px] text-gray-600">
-                                    Search the web and inject results into context.
-                                </p>
-                            </div>
-
-                            <div className="border-t border-white/5 pt-5">
-                                <label className="text-xs text-gray-500 block mb-2">Visible Actions</label>
-                                <div className="flex flex-wrap gap-1.5">
-                                    {[
-                                        { key: 'longer', label: 'Longer' },
-                                        { key: 'shorter', label: 'Shorter' },
-                                        { key: 'formal', label: 'Formal' },
-                                        { key: 'casual', label: 'Casual' },
-                                        { key: 'technical', label: 'Technical' },
-                                        { key: 'translate', label: 'Translate' },
-                                        { key: 'devil', label: "Devil's Advocate" },
-                                        { key: 'perspective_ceo', label: 'CEO' },
-                                        { key: 'perspective_child', label: 'ELI8' },
-                                        { key: 'perspective_scientist', label: 'Scientist' },
-                                        { key: 'perspective_poet', label: 'Poet' },
-                                        { key: 'improve', label: 'Improve' },
-                                        { key: 'secure', label: 'Secure' },
-                                        { key: 'faster', label: 'Faster' },
-                                        { key: 'docs', label: 'Docs' },
-                                        { key: 'tests', label: 'Tests' },
-                                        { key: 'selfAssess', label: 'Ethical' },
-                                        { key: 'selfCritique', label: 'Self-Critique' },
-                                    ].map(a => {
-                                        const enabled = settings.enabledActions?.[a.key] !== false;
-                                        return (
-                                            <button
-                                                key={a.key}
-                                                onClick={() => setSettings({
-                                                    ...settings,
-                                                    enabledActions: { ...settings.enabledActions, [a.key]: !enabled },
-                                                })}
-                                                className={`px-2 py-1 rounded text-[10px] font-medium transition-colors ${
-                                                    enabled
-                                                        ? 'bg-blue-500/20 text-blue-400 border border-blue-500/30'
-                                                        : 'bg-white/[0.03] text-gray-600 border border-white/5 hover:text-gray-400'
-                                                }`}
-                                            >
-                                                {a.label}
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-                                <p className="text-[10px] text-gray-600 mt-1.5">
-                                    Toggle which actions appear on responses and code blocks.
-                                </p>
-                            </div>
-
-                            <div className="border-t border-white/5 pt-5">
-                                <label className="text-xs text-gray-500 block mb-2">System Prompt</label>
-                                <textarea
-                                    value={settings.systemPrompt}
-                                    onChange={(e) => setSettings({ ...settings, systemPrompt: e.target.value })}
-                                    className="w-full bg-white/[0.03] border border-white/10 rounded-lg p-3 text-xs text-gray-300 h-28 resize-none outline-none focus:border-white/20 transition-colors leading-relaxed"
-                                    placeholder="Set model behavior..."
-                                />
-                            </div>
-                        </div>
-                    </div>
-                )}
+                            {/* Collapse toggle — mirrors left sidebar */}
+                            <button
+                                onClick={toggleParams}
+                                className={`mx-auto mb-4 p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/10 transition-colors shrink-0 ml-auto mr-4`}
+                                title="Collapse parameters"
+                            >
+                                <ChevronsRight size={16} />
+                            </button>
+                        </>
+                    ) : (
+                        <>
+                            <div className="flex-1" />
+                            <button
+                                onClick={toggleParams}
+                                className="mx-auto mb-4 p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/10 transition-colors shrink-0"
+                                title="Expand parameters"
+                            >
+                                <ChevronsLeft size={16} />
+                            </button>
+                        </>
+                    )}
+                </div>
             </div>
         </div>
     )
