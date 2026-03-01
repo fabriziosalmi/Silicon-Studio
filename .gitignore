@@ -40,3 +40,4 @@ docs/package-lock.json
 
 # Internal planning
 PLAN.md
+.claude/settings.json

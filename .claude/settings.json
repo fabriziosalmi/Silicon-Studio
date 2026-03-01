@@ -3,7 +3,17 @@
     "allow": [
       "Bash(npm init -y)",
       "Bash(curl -s http://localhost:8000/health)",
-      "Bash(bash /tmp/make-gif.sh)"
+      "Bash(bash /tmp/make-gif.sh)",
+      "Bash(gh release list --repo rileycleavenger/Silicon-Studio --limit 5)",
+      "Bash(gh release list --repo fabriziosalmi/silicondev --limit 5)",
+      "Bash(gh release list --repo fabriziosalmi/Silicon-Studio --limit 5)",
+      "Bash(npm run build:main)",
+      "Bash(backend/.venv/bin/python -c \"import PyInstaller; print\\(PyInstaller.__version__\\)\")",
+      "Bash(.venv/bin/python -m PyInstaller spec/silicon_server.spec --clean --noconfirm)",
+      "Bash(npx electron-builder build --mac --config.directories.app=.)",
+      "Bash(.venv/bin/python -m PyInstaller spec/silicon_server.spec --clean --noconfirm --distpath dist --workpath build)",
+      "Bash(/Users/fab/Documents/git/Silicon-Studio/backend/.venv/bin/python -m PyInstaller /Users/fab/Documents/git/Silicon-Studio/backend/spec/silicon_server.spec --clean --noconfirm --distpath /Users/fab/Documents/git/Silicon-Studio/backend/dist --workpath /Users/fab/Documents/git/Silicon-Studio/backend/build)",
+      "Bash(gh release upload v0.4.1 /Users/fab/Documents/git/Silicon-Studio/release/SiliconDev-0.4.1-arm64.dmg --repo fabriziosalmi/silicondev)"
     ]
   }
 }
