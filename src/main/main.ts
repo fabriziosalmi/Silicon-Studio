@@ -9,6 +9,22 @@ import { autoUpdater } from 'electron-updater';
 log.transports.file.maxSize = 5 * 1024 * 1024;
 log.transports.file.format = '{y}-{m}-{d} {h}:{i}:{s} [{level}] {text}';
 
+// Catch uncaught errors in the main process so they don't vanish silently
+process.on('uncaughtException', (err) => {
+    log.error('Uncaught exception in main process:', err);
+    dialog.showErrorBox('Fatal Error', `${err.message}\n\nSee log for details: ${log.transports.file.getFile().path}`);
+    app.exit(1);
+});
+process.on('unhandledRejection', (reason) => {
+    log.error('Unhandled rejection in main process:', reason);
+});
+
+// Prevent second instance — two backends on the same port would collide
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+    app.quit();
+}
+
 let backendProcess: ChildProcess | null = null;
 let mainWindow: BrowserWindow | null = null;
 let isQuitting = false;
@@ -55,7 +71,8 @@ function startBackend() {
     try {
         backendProcess = spawn(command, args, {
             cwd: isDev ? path.join(__dirname, '../../backend') : path.join(process.resourcesPath, 'backend', 'dist', 'silicon_server'),
-            stdio: ['ignore', 'pipe', 'pipe']
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: { ...process.env, SILICON_PARENT_PID: String(process.pid) },
         });
 
         backendProcess.on('error', (err) => {
@@ -236,6 +253,14 @@ app.whenReady().then(() => {
             createWindow();
         }
     });
+});
+
+app.on('second-instance', () => {
+    if (mainWindow) {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        mainWindow.show();
+        mainWindow.focus();
+    }
 });
 
 app.on('before-quit', () => {

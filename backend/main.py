@@ -71,6 +71,35 @@ except Exception as e:
     logger.critical(f"Import error: {e}", exc_info=True)
     sys.exit(1)
 
+def _start_parent_watchdog():
+    """If launched by Electron, poll the parent PID every 5s.
+
+    When the parent dies (segfault, SIGKILL), we get no SIGTERM, so
+    the backend stays alive as an orphan. This watchdog catches that
+    and exits cleanly.
+    """
+    parent_pid_str = os.environ.get("SILICON_PARENT_PID")
+    if not parent_pid_str:
+        return  # not launched by Electron — skip
+    parent_pid = int(parent_pid_str)
+    import threading, signal
+
+    def _watch():
+        while True:
+            import time
+            time.sleep(5)
+            try:
+                os.kill(parent_pid, 0)  # signal 0 = existence check
+            except OSError:
+                logger.warning(f"Parent process {parent_pid} gone — exiting")
+                os.kill(os.getpid(), signal.SIGTERM)
+                return
+
+    t = threading.Thread(target=_watch, daemon=True)
+    t.start()
+    logger.info(f"Parent watchdog started (parent PID={parent_pid})")
+
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown hooks.
@@ -79,6 +108,7 @@ async def lifespan(app: FastAPI):
     processes so macOS releases the port immediately.
     """
     logger.info("SiliconDev backend starting up")
+    _start_parent_watchdog()
     yield
     logger.info("SiliconDev backend shutting down — cleaning up resources")
 

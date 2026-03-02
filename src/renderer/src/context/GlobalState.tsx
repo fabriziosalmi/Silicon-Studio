@@ -86,23 +86,32 @@ export function GlobalStateProvider({ children }: { children: React.ReactNode })
             }
         };
 
-        const onVisible = () => {
-            if (document.visibilityState === 'visible') poll();
+        const startPolling = () => {
+            clearInterval(interval);
+            poll();
+            interval = setInterval(poll, 5000);
+        };
+
+        const onVisibilityChange = () => {
+            if (document.visibilityState === 'visible') {
+                startPolling();
+            } else {
+                clearInterval(interval);
+            }
         };
 
         const init = async () => {
             await initApiBase();
             if (!mounted) return;
-            document.addEventListener('visibilitychange', onVisible);
-            poll();
-            interval = setInterval(poll, 5000);
+            document.addEventListener('visibilitychange', onVisibilityChange);
+            startPolling();
         };
         init();
 
         return () => {
             mounted = false;
             clearInterval(interval);
-            document.removeEventListener('visibilitychange', onVisible);
+            document.removeEventListener('visibilitychange', onVisibilityChange);
         };
     }, []);
 
