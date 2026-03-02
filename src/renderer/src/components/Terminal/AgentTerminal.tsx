@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { PanelRightOpen, PanelRightClose, Trash2, TerminalSquare, AlertCircle } from 'lucide-react'
+import { PanelRightOpen, PanelRightClose, Trash2, AlertCircle } from 'lucide-react'
 import { useGlobalState } from '../../context/GlobalState'
 import { apiClient } from '../../api/client'
 import { MessageFeed } from './MessageFeed'
