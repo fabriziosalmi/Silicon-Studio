@@ -53,6 +53,13 @@ jobs:
         working-directory: src/renderer
         run: npm ci
 
+      - name: Audit dependencies
+        run: npm audit --omit=dev --audit-level=high
+
+      - name: Audit renderer dependencies
+        working-directory: src/renderer
+        run: npm audit --omit=dev --audit-level=high
+
       - name: TypeScript check
         working-directory: src/renderer
         run: npx tsc --noEmit

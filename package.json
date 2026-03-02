@@ -37,6 +37,7 @@
         },
         "mac": {
             "icon": "resources/icon.icns",
+            "arch": ["arm64"],
             "target": [
                 "dmg",
                 "zip"
