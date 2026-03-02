@@ -29,12 +29,12 @@ class BranchRequest(BaseModel):
 
 
 @router.get("/")
-async def list_conversations():
+def list_conversations():
     return service.list_conversations()
 
 
 @router.get("/{conversation_id}")
-async def get_conversation(conversation_id: str):
+def get_conversation(conversation_id: str):
     conv = service.get_conversation(conversation_id)
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found")
@@ -42,7 +42,7 @@ async def get_conversation(conversation_id: str):
 
 
 @router.post("/")
-async def create_conversation(req: ConversationCreate):
+def create_conversation(req: ConversationCreate):
     return service.create_conversation(
         title=req.title,
         messages=req.messages,
@@ -51,7 +51,7 @@ async def create_conversation(req: ConversationCreate):
 
 
 @router.patch("/{conversation_id}")
-async def update_conversation(conversation_id: str, req: ConversationUpdate):
+def update_conversation(conversation_id: str, req: ConversationUpdate):
     updates = req.model_dump(exclude_none=True)
     conv = service.update_conversation(conversation_id, updates)
     if not conv:
@@ -60,14 +60,14 @@ async def update_conversation(conversation_id: str, req: ConversationUpdate):
 
 
 @router.delete("/{conversation_id}")
-async def delete_conversation(conversation_id: str):
+def delete_conversation(conversation_id: str):
     if service.delete_conversation(conversation_id):
         return {"status": "deleted"}
     raise HTTPException(status_code=404, detail="Conversation not found")
 
 
 @router.post("/{conversation_id}/branch")
-async def branch_conversation(conversation_id: str, req: BranchRequest):
+def branch_conversation(conversation_id: str, req: BranchRequest):
     conv = service.branch_conversation(conversation_id, req.message_index)
     if not conv:
         raise HTTPException(status_code=404, detail="Conversation not found or invalid message index")
@@ -75,5 +75,5 @@ async def branch_conversation(conversation_id: str, req: BranchRequest):
 
 
 @router.post("/search")
-async def search_conversations(req: SearchQuery):
+def search_conversations(req: SearchQuery):
     return service.search_conversations(req.q)

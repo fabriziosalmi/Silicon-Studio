@@ -759,6 +759,14 @@ export const apiClient = {
             });
             await throwIfNotOk(res, 'Failed to decide diff');
         },
+        respondToEscalation: async (sessionId: string, escalationId: string, userMessage: string): Promise<void> => {
+            const res = await fetch(`${API_BASE}/api/terminal/escalation/respond`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ session_id: sessionId, escalation_id: escalationId, user_message: userMessage })
+            });
+            await throwIfNotOk(res, 'Failed to respond to escalation');
+        },
         stop: async (sessionId: string): Promise<void> => {
             const res = await fetch(`${API_BASE}/api/terminal/stop`, {
                 method: 'POST',

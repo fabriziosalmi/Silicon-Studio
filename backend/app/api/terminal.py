@@ -10,7 +10,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
-from app.agents.nanocore.types import TerminalRequest, DiffDecision
+from app.agents.nanocore.types import TerminalRequest, DiffDecision, EscalationResponse
 from app.agents.nanocore.supervisor import SupervisorAgent
 from app.agents.nanocore.tools import run_bash
 
@@ -99,6 +99,21 @@ async def decide_diff(decision: DiffDecision):
         raise HTTPException(status_code=404, detail="Diff not found or already resolved")
 
     return {"status": "resolved", "approved": decision.approved}
+
+
+@router.post("/escalation/respond")
+async def respond_to_escalation(response: EscalationResponse):
+    """Provide user guidance for a stuck agent."""
+    async with _sessions_lock:
+        agent = _active_sessions.get(response.session_id)
+    if not agent:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    ok = agent.resolve_escalation(response.escalation_id, response.user_message)
+    if not ok:
+        raise HTTPException(status_code=404, detail="Escalation not found or already resolved")
+
+    return {"status": "resolved"}
 
 
 @router.post("/stop")

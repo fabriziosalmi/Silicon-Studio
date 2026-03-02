@@ -1,11 +1,13 @@
 import json
 import logging
 import os
+import tempfile
 
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
 from typing import Optional
 from app.preparation.service import DataPreparationService
+from app.security import safe_user_file
 
 logger = logging.getLogger(__name__)
 
@@ -30,9 +32,10 @@ class McpGenerateRequest(BaseModel):
     output_path: str = Field(min_length=1, max_length=1024)
 
 @router.post("/preview")
-async def preview_csv(request: PreviewRequest):
+def preview_csv(request: PreviewRequest):
     """Preview a CSV file."""
     try:
+        safe_user_file(request.file_path)
         data = service.preview_csv(request.file_path, request.limit)
         return {"data": data}
     except ValueError as e:
@@ -41,9 +44,11 @@ async def preview_csv(request: PreviewRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/convert")
-async def convert_csv(request: ConvertRequest):
+def convert_csv(request: ConvertRequest):
     """Convert CSV to JSONL."""
     try:
+        safe_user_file(request.file_path)
+        safe_user_file(request.output_path)
         result = service.convert_csv_to_jsonl(
             request.file_path,
             request.output_path,
@@ -65,6 +70,11 @@ async def generate_mcp(request: McpGenerateRequest):
     model to generate example user queries for each tool, and writes the
     resulting instruction/output pairs as JSONL.
     """
+    try:
+        safe_user_file(request.output_path)
+    except ValueError as e:
+        raise HTTPException(400, str(e))
+
     from app.mcp.service import MCPService
 
     mcp_service = MCPService()
@@ -107,11 +117,21 @@ async def generate_mcp(request: McpGenerateRequest):
             "output": f"The {tool_name} tool {tool_desc.lower()}. It accepts the following parameters:\n{tool_schema}",
         })
 
-    # 3. Write JSONL output
-    os.makedirs(os.path.dirname(request.output_path) or ".", exist_ok=True)
-    with open(request.output_path, "w") as f:
-        for entry in dataset:
-            f.write(json.dumps(entry) + "\n")
+    # 3. Write JSONL output (atomic: tempfile + os.replace)
+    out_dir = os.path.dirname(request.output_path) or "."
+    os.makedirs(out_dir, exist_ok=True)
+    fd, tmp_path = tempfile.mkstemp(dir=out_dir, suffix=".tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            for entry in dataset:
+                f.write(json.dumps(entry) + "\n")
+        os.replace(tmp_path, request.output_path)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
 
     logger.info(f"Generated {len(dataset)} MCP dataset entries to {request.output_path}")
     preview = dataset[:5]

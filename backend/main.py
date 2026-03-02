@@ -1,5 +1,9 @@
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from fastapi.exceptions import RequestValidationError
 import uvicorn
 import os
 import sys
@@ -67,10 +71,56 @@ except Exception as e:
     logger.critical(f"Import error: {e}", exc_info=True)
     sys.exit(1)
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Startup and shutdown hooks.
+
+    On shutdown: unload models, stop indexer, kill NanoCore background
+    processes so macOS releases the port immediately.
+    """
+    logger.info("SiliconDev backend starting up")
+    yield
+    logger.info("SiliconDev backend shutting down — cleaning up resources")
+
+    # 1. Stop background indexer
+    try:
+        from app.search.indexer import indexer_service
+        if hasattr(indexer_service, 'stop_background'):
+            indexer_service.stop_background()
+            logger.info("Stopped background indexer")
+    except Exception as e:
+        logger.debug(f"Indexer shutdown: {e}")
+
+    # 2. Unload MLX model and stop any active jobs
+    try:
+        from app.api.engine import service as engine_service
+        engine_service.stop_generation()
+        if engine_service.active_model is not None:
+            engine_service.unload_model()
+            logger.info("Unloaded MLX model")
+    except Exception as e:
+        logger.debug(f"Engine shutdown: {e}")
+
+    # 3. Kill any NanoCore terminal sessions
+    try:
+        from app.api.terminal import _active_sessions, _sessions_lock
+        async with _sessions_lock:
+            for sid, agent in list(_active_sessions.items()):
+                agent.stop()
+                await agent.process_manager.cleanup_all()
+            _active_sessions.clear()
+        logger.info("Cleaned up terminal sessions")
+    except Exception as e:
+        logger.debug(f"Terminal shutdown: {e}")
+
+    logger.info("Shutdown complete")
+
+
 app = FastAPI(
     title="SiliconDev Backend",
     description="Local-first LLM fine-tuning engine",
-    version="0.5.0"
+    version="0.5.2",
+    lifespan=lifespan,
 )
 
 # Configure CORS for local development securely
@@ -85,6 +135,22 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """Return validation errors in a readable format instead of raw 422."""
+    errors = []
+    for err in exc.errors():
+        loc = " -> ".join(str(l) for l in err.get("loc", []))
+        errors.append(f"{loc}: {err.get('msg', 'invalid')}")
+    return JSONResponse(
+        status_code=422,
+        content={
+            "detail": "Validation error",
+            "errors": errors,
+        },
+    )
+
 
 app.include_router(monitor_router, prefix="/api/monitor", tags=["monitor"])
 app.include_router(preparation_router, prefix="/api/preparation", tags=["preparation"])

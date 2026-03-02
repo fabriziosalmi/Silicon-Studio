@@ -6,6 +6,7 @@ export type FeedItemType =
   | 'tool_start'
   | 'tool_output'
   | 'diff_proposal'
+  | 'human_escalation'
   | 'error'
   | 'info'
 
@@ -26,6 +27,13 @@ export interface ToolMetadata {
   exitCode?: number
 }
 
+export interface EscalationMetadata {
+  escalationId: string
+  reason: string
+  status: 'pending' | 'responded'
+  userMessage?: string
+}
+
 export interface FeedItem {
   id: string
   type: FeedItemType
@@ -33,6 +41,7 @@ export interface FeedItem {
   timestamp: number
   toolMeta?: ToolMetadata
   diffMeta?: DiffMetadata
+  escalationMeta?: EscalationMetadata
 }
 
 export interface TelemetryAction {

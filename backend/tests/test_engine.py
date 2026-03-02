@@ -1,9 +1,12 @@
 """Tests for the engine API (models, finetune, chat, export)."""
 
+import os
 import pytest
 from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
 from main import app
+
+HOME = os.path.expanduser("~")
 
 client = TestClient(app)
 
@@ -62,10 +65,11 @@ def test_delete_model_not_found(mock_service):
 
 @patch("app.api.engine.service")
 def test_register_model_success(mock_service):
-    mock_service.register_model.return_value = {"id": "/tmp/model", "name": "Custom"}
+    model_path = os.path.join(HOME, ".silicon-studio", "models", "custom")
+    mock_service.register_model.return_value = {"id": model_path, "name": "Custom"}
     resp = client.post("/api/engine/models/register", json={
         "name": "Custom",
-        "path": "/tmp/model",
+        "path": model_path,
     })
     assert resp.status_code == 200
     assert resp.json()["name"] == "Custom"
@@ -85,10 +89,11 @@ def test_register_model_bad_path(mock_service):
 
 @patch("app.api.engine.service")
 def test_scan_models(mock_service):
+    scan_path = os.path.join(HOME, ".silicon-studio", "models")
     mock_service.scan_directory.return_value = [
-        {"id": "/tmp/m1", "name": "m1", "path": "/tmp/m1", "size": "2GB"},
+        {"id": "m1", "name": "m1", "path": os.path.join(scan_path, "m1"), "size": "2GB"},
     ]
-    resp = client.post("/api/engine/models/scan", json={"path": "/tmp"})
+    resp = client.post("/api/engine/models/scan", json={"path": scan_path})
     assert resp.status_code == 200
     assert len(resp.json()) == 1
 
@@ -169,9 +174,10 @@ def test_finetune_starts_job(mock_service):
         "status": "started",
         "job_name": "My Fine-Tune",
     })
+    dataset_path = os.path.join(HOME, ".silicon-studio", "data.jsonl")
     resp = client.post("/api/engine/finetune", json={
         "model_id": "test-model",
-        "dataset_path": "/data.jsonl",
+        "dataset_path": dataset_path,
         "epochs": 3,
         "job_name": "My Fine-Tune",
     })
@@ -283,13 +289,14 @@ def test_export_rejects_qbits_too_high():
 
 @patch("app.api.engine.service")
 def test_export_success(mock_service):
+    out_path = os.path.join(HOME, ".silicon-studio", "exports", "out")
     mock_service.export_model = AsyncMock(return_value={
         "status": "success",
-        "path": "/tmp/out",
+        "path": out_path,
     })
     resp = client.post("/api/engine/models/export", json={
         "model_id": "ft-abc",
-        "output_path": "/tmp/out",
+        "output_path": out_path,
         "q_bits": 4,
     })
     assert resp.status_code == 200

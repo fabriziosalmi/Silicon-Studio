@@ -29,7 +29,9 @@ SSEEventType = Literal[
     "tool_log",
     "tool_done",
     "diff_proposal",
+    "human_escalation",
     "telemetry_update",
+    "budget_exhausted",
     "error",
     "done",
 ]
@@ -59,3 +61,9 @@ class DiffDecision(BaseModel):
     call_id: str = Field(min_length=1)
     approved: bool
     reason: str = Field(default="", max_length=1024)
+
+
+class EscalationResponse(BaseModel):
+    session_id: str = Field(min_length=1)
+    escalation_id: str = Field(min_length=1)
+    user_message: str = Field(default="", max_length=4096)

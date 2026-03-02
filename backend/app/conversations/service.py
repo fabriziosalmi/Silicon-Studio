@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
+from app.security import safe_id
+
 logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 1
@@ -70,6 +72,7 @@ class ConversationService:
 
     def get_conversation(self, conversation_id: str) -> Optional[Dict[str, Any]]:
         """Return full conversation including messages."""
+        safe_id(conversation_id)
         path = self.conversations_dir / f"{conversation_id}.json"
         if not path.exists():
             return None
@@ -120,6 +123,7 @@ class ConversationService:
         return conversation
 
     def delete_conversation(self, conversation_id: str) -> bool:
+        safe_id(conversation_id)
         path = self.conversations_dir / f"{conversation_id}.json"
         if path.exists():
             path.unlink()

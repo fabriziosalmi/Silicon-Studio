@@ -1,7 +1,8 @@
-import { useRef, useEffect, memo, useCallback } from 'react'
-import { User, Bot, TerminalSquare, AlertCircle, Info } from 'lucide-react'
+import { useState, useRef, useEffect, memo, useCallback } from 'react'
+import { User, Bot, TerminalSquare, AlertCircle, Info, AlertTriangle, Send } from 'lucide-react'
 import { StreamingMarkdown } from './StreamingMarkdown'
 import { HolographicDiff } from './HolographicDiff'
+import { apiClient } from '../../api/client'
 import type { FeedItem } from './types'
 
 // Strip XML tool/arg tags that may leak through the backend SSE stream.
@@ -17,7 +18,82 @@ interface MessageFeedProps {
   items: FeedItem[]
   sessionId: string
   onDiffDecided: (callId: string, approved: boolean, reason?: string) => void
+  onEscalationResponded: (escalationId: string, userMessage: string) => void
 }
+
+/**
+ * Inline escalation card — shows when agent is stuck and waiting for user input.
+ */
+const EscalationCard = memo(function EscalationCard({
+  item,
+  sessionId,
+  onResponded,
+}: {
+  item: FeedItem
+  sessionId: string
+  onResponded: (escalationId: string, userMessage: string) => void
+}) {
+  const [input, setInput] = useState('')
+  const [sending, setSending] = useState(false)
+  const meta = item.escalationMeta!
+
+  const handleSubmit = useCallback(async () => {
+    if (!input.trim() || sending) return
+    setSending(true)
+    try {
+      await apiClient.terminal.respondToEscalation(sessionId, meta.escalationId, input.trim())
+      onResponded(meta.escalationId, input.trim())
+    } catch {
+      // ignore — session may have ended
+    } finally {
+      setSending(false)
+    }
+  }, [input, sending, sessionId, meta.escalationId, onResponded])
+
+  if (meta.status === 'responded') {
+    return (
+      <div className="p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-lg space-y-1">
+        <div className="flex items-center gap-2 text-xs text-yellow-500">
+          <AlertTriangle size={12} />
+          <span>Agent paused: {meta.reason}</span>
+        </div>
+        <div className="text-xs text-gray-400">
+          Your guidance: <span className="text-white">{meta.userMessage}</span>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="p-3 bg-yellow-500/10 border border-yellow-500/30 rounded-lg space-y-2">
+      <div className="flex items-center gap-2 text-sm text-yellow-400">
+        <AlertTriangle size={14} />
+        <span>Agent is stuck and needs your help</span>
+      </div>
+      <p className="text-xs text-gray-400">{meta.reason}</p>
+      <div className="flex gap-2">
+        <input
+          type="text"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && handleSubmit()}
+          placeholder="Type guidance for the agent..."
+          className="flex-1 bg-black/30 border border-white/10 rounded px-2 py-1.5 text-xs text-white placeholder-gray-600 focus:outline-none focus:border-yellow-500/40"
+          disabled={sending}
+        />
+        <button
+          type="button"
+          onClick={handleSubmit}
+          disabled={!input.trim() || sending}
+          className="px-2 py-1.5 bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-500/30 rounded text-xs text-yellow-400 disabled:opacity-40 transition-colors flex items-center gap-1"
+        >
+          <Send size={10} />
+          Send
+        </button>
+      </div>
+    </div>
+  )
+})
 
 /**
  * Memoized individual feed item — only re-renders when the item itself changes.
@@ -26,10 +102,12 @@ const FeedItemView = memo(function FeedItemView({
   item,
   sessionId,
   onDiffDecided,
+  onEscalationResponded,
 }: {
   item: FeedItem
   sessionId: string
   onDiffDecided: (callId: string, approved: boolean, reason?: string) => void
+  onEscalationResponded: (escalationId: string, userMessage: string) => void
 }) {
   switch (item.type) {
     case 'user':
@@ -90,6 +168,15 @@ const FeedItemView = memo(function FeedItemView({
         />
       ) : null
 
+    case 'human_escalation':
+      return item.escalationMeta ? (
+        <EscalationCard
+          item={item}
+          sessionId={sessionId}
+          onResponded={onEscalationResponded}
+        />
+      ) : null
+
     case 'error':
       return (
         <div className="flex items-start gap-2 p-2 bg-red-500/10 border border-red-500/20 rounded-lg">
@@ -111,7 +198,7 @@ const FeedItemView = memo(function FeedItemView({
   }
 })
 
-export function MessageFeed({ items, sessionId, onDiffDecided }: MessageFeedProps) {
+export function MessageFeed({ items, sessionId, onDiffDecided, onEscalationResponded }: MessageFeedProps) {
   const bottomRef = useRef<HTMLDivElement>(null)
   const containerRef = useRef<HTMLDivElement>(null)
   const userScrolledUpRef = useRef(false)
@@ -121,6 +208,13 @@ export function MessageFeed({ items, sessionId, onDiffDecided }: MessageFeedProp
   onDiffDecidedRef.current = onDiffDecided
   const stableDiffDecided = useCallback((callId: string, approved: boolean, reason?: string) => {
     onDiffDecidedRef.current(callId, approved, reason)
+  }, [])
+
+  // Stable callback ref for onEscalationResponded
+  const onEscalationRef = useRef(onEscalationResponded)
+  onEscalationRef.current = onEscalationResponded
+  const stableEscalationResponded = useCallback((escalationId: string, userMessage: string) => {
+    onEscalationRef.current(escalationId, userMessage)
   }, [])
 
   // Track whether user has scrolled up manually
@@ -164,6 +258,7 @@ export function MessageFeed({ items, sessionId, onDiffDecided }: MessageFeedProp
           item={item}
           sessionId={sessionId}
           onDiffDecided={stableDiffDecided}
+          onEscalationResponded={stableEscalationResponded}
         />
       ))}
       <div ref={bottomRef} />

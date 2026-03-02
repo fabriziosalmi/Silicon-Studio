@@ -191,6 +191,81 @@ async def run_bash(command: str, timeout: int = 60) -> AsyncGenerator[tuple[str,
             pass
 
 
+async def read_file(file_path: str, max_lines: int = 300) -> dict:
+    """Read a file safely and return its content with line numbers.
+
+    Returns {file_path, content, lines, error}. If error is set, the
+    file could not be read.
+    """
+    # Safety: block reads of system paths
+    for ppath in PROTECTED_PATHS:
+        if file_path.startswith(ppath):
+            return {
+                "file_path": file_path,
+                "content": "",
+                "lines": 0,
+                "error": f"Blocked: cannot read files in protected path {ppath}",
+            }
+
+    p = Path(file_path)
+    if not p.exists():
+        return {
+            "file_path": file_path,
+            "content": "",
+            "lines": 0,
+            "error": f"File not found: {file_path}",
+        }
+
+    if not p.is_file():
+        return {
+            "file_path": file_path,
+            "content": "",
+            "lines": 0,
+            "error": f"Not a regular file: {file_path}",
+        }
+
+    file_size = p.stat().st_size
+    if file_size > MAX_EDIT_FILE_BYTES:
+        return {
+            "file_path": file_path,
+            "content": "",
+            "lines": 0,
+            "error": f"File too large ({file_size // 1024} KB, max {MAX_EDIT_FILE_BYTES // 1024} KB). Use run_bash with head/tail to read portions.",
+        }
+
+    try:
+        async with aiofiles.open(file_path, mode="r", errors="replace") as f:
+            content = await f.read()
+    except Exception as e:
+        return {
+            "file_path": file_path,
+            "content": "",
+            "lines": 0,
+            "error": f"Failed to read: {e}",
+        }
+
+    all_lines = content.splitlines()
+    total_lines = len(all_lines)
+
+    # Cap output to max_lines to avoid blowing context
+    if total_lines > max_lines:
+        shown = "\n".join(
+            f"{i+1:4d} | {line}" for i, line in enumerate(all_lines[:max_lines])
+        )
+        shown += f"\n[... {total_lines - max_lines} more lines, use run_bash with sed/head to see the rest]"
+    else:
+        shown = "\n".join(
+            f"{i+1:4d} | {line}" for i, line in enumerate(all_lines)
+        )
+
+    return {
+        "file_path": file_path,
+        "content": shown,
+        "lines": total_lines,
+        "error": None,
+    }
+
+
 async def generate_edit_diff(file_path: str, new_content: str) -> dict:
     """Generate a unified diff for a file edit without writing to disk.
 

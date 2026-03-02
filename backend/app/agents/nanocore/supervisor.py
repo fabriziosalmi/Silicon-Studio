@@ -6,12 +6,13 @@ import os
 import re
 import time
 import uuid
+from pathlib import Path
 from typing import AsyncGenerator
 
 from .types import AgentState, TrajectoryEntry
 from .prompts import SYSTEM_PROMPT
 from .parser import extract_tool_calls, has_partial_tool_tag, strip_tool_calls
-from .tools import run_bash, generate_edit_diff, apply_edit, apply_patch_content
+from .tools import run_bash, read_file, generate_edit_diff, apply_edit, apply_patch_content
 from .validators import validate_content, detect_lazy_edit
 from .guardrails import LoopGuardrails
 from .context import ContextManager, count_tokens
@@ -68,6 +69,7 @@ class SupervisorAgent:
         self._state = AgentState.thinking
         self._stopped = False
         self._pending_diffs: dict[str, dict] = {}  # call_id -> {event, approved, diff_info}
+        self._pending_escalations: dict[str, dict] = {}  # esc_id -> {event, user_message}
         self._trajectory: list[TrajectoryEntry] = []
         self._total_tokens = 0
         self._start_time = 0.0
@@ -103,6 +105,15 @@ class SupervisorAgent:
             return False
         pending["approved"] = approved
         pending["reason"] = reason
+        pending["event"].set()
+        return True
+
+    def resolve_escalation(self, escalation_id: str, user_message: str) -> bool:
+        """Resolve a pending human escalation. Returns False if not found."""
+        pending = self._pending_escalations.get(escalation_id)
+        if not pending:
+            return False
+        pending["user_message"] = user_message
         pending["event"].set()
         return True
 
@@ -164,6 +175,48 @@ class SupervisorAgent:
         if pending.get("timed_out"):
             return None, f"Auto-rejected: no response within {MAX_APPROVAL_WAIT_SECS}s"
         return pending.get("approved", False), pending.get("reason", "")
+
+    async def _wait_for_human_escalation(self, escalation_id: str, reason: str, iteration: int):
+        """Pause the agent loop and wait for user guidance.
+
+        Emits a human_escalation SSE event, then blocks until the user
+        responds via resolve_escalation(). Yields heartbeat telemetry
+        while waiting.
+        """
+        event = asyncio.Event()
+        self._pending_escalations[escalation_id] = {
+            "event": event,
+            "user_message": "",
+        }
+
+        self._state = AgentState.waiting_human_approval
+        yield _sse("human_escalation", {
+            "escalation_id": escalation_id,
+            "reason": reason,
+            "consecutive_errors": self.guardrails._consecutive_same,
+        })
+        yield _sse("telemetry_update", self._telemetry_data(iteration))
+
+        wait_start = time.time()
+        while not event.is_set():
+            if self._stopped:
+                break
+            if time.time() - wait_start > MAX_APPROVAL_WAIT_SECS:
+                break
+            try:
+                await asyncio.wait_for(event.wait(), timeout=5.0)
+            except asyncio.TimeoutError:
+                yield _sse("telemetry_update", self._telemetry_data(iteration))
+
+    def _consume_escalation_result(self, escalation_id: str) -> str | None:
+        """Read and clean up a pending escalation result.
+
+        Returns the user's message, or None if stopped/timed out.
+        """
+        pending = self._pending_escalations.pop(escalation_id, {})
+        if self._stopped:
+            return None
+        return pending.get("user_message") or None
 
     async def run(self, prompt: str) -> AsyncGenerator[dict, None]:
         """Main agent loop. Yields SSE event dicts."""
@@ -330,7 +383,24 @@ class SupervisorAgent:
                         if exit_code != 0:
                             self.guardrails.record_error(raw_output)
                             if self.guardrails.is_stuck_on_same_error():
-                                tool_results.append(self.guardrails.rubber_duck_message())
+                                # Pause and ask the user for help
+                                esc_id = str(uuid.uuid4())[:8]
+                                async for evt in self._wait_for_human_escalation(
+                                    esc_id,
+                                    f"Same error {self.guardrails._consecutive_same} times in a row",
+                                    iteration,
+                                ):
+                                    yield evt
+                                user_msg = self._consume_escalation_result(esc_id)
+                                if user_msg:
+                                    tool_results.append(
+                                        f"[SYSTEM] User guidance: {user_msg}\n"
+                                        "Follow the user's instructions to resolve this."
+                                    )
+                                elif self._stopped:
+                                    break
+                                else:
+                                    tool_results.append(self.guardrails.rubber_duck_message())
 
                         self._trajectory.append(TrajectoryEntry(
                             agent="supervisor", action="run_bash",
@@ -338,9 +408,37 @@ class SupervisorAgent:
                             tokens=iter_tokens,
                         ))
 
+                elif tc.name == "read_file":
+                    file_path = tc.args.get("path", "")
+                    max_lines = 300
+                    try:
+                        max_lines = int(tc.args.get("max_lines", "300"))
+                    except (ValueError, TypeError):
+                        pass
+
+                    yield _sse("tool_start", {"tool": "read_file", "args": {"path": file_path}, "call_id": call_id})
+
+                    result = await read_file(file_path, max_lines=max_lines)
+                    if result["error"]:
+                        yield _sse("tool_log", {"call_id": call_id, "stream": "stderr", "text": result["error"]})
+                        yield _sse("tool_done", {"call_id": call_id, "exit_code": 1})
+                        tool_results.append(f"[read_file] Error: {result['error']}")
+                    else:
+                        yield _sse("tool_log", {"call_id": call_id, "stream": "stdout", "text": f"({result['lines']} lines)\n"})
+                        yield _sse("tool_done", {"call_id": call_id, "exit_code": 0})
+                        tool_results.append(f"[read_file {file_path}] ({result['lines']} lines)\n{_truncate(result['content'])}")
+
                 elif tc.name == "edit_file":
                     file_path = tc.args.get("path", "")
                     new_content = tc.args.get("content", "")
+
+                    # Guard: redirect to patch_file for existing files
+                    if Path(file_path).exists():
+                        tool_results.append(
+                            f"[edit_file] Warning: {file_path} already exists. "
+                            "Use patch_file for surgical edits to existing files. "
+                            "edit_file will rewrite the entire file — only use it if you truly need a full rewrite."
+                        )
 
                     # Fix 5: validate before generating diff
                     lazy_err = detect_lazy_edit(new_content)

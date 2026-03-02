@@ -6,6 +6,7 @@ import uuid
 import json
 import logging
 from app.engine.service import MLXEngineService
+from app.security import safe_user_file
 
 logger = logging.getLogger(__name__)
 
@@ -29,6 +30,10 @@ class FineTuneRequest(BaseModel):
 @router.post("/finetune")
 async def start_finetune(request: FineTuneRequest):
     """Start a fine-tuning job."""
+    try:
+        safe_user_file(request.dataset_path)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     job_id = str(uuid.uuid4())
     logger.info(f"Received finetune request. Job Name: '{request.job_name}'")
     config = request.model_dump()
@@ -74,6 +79,7 @@ class RegisterRequest(BaseModel):
 async def register_model(request: RegisterRequest):
     """Register a custom model from a local path."""
     try:
+        safe_user_file(request.path)
         new_model = service.register_model(request.name, request.path, request.url)
         return new_model
     except ValueError as e:
@@ -88,6 +94,7 @@ class ScanRequest(BaseModel):
 async def scan_models(request: ScanRequest):
     """Scan a directory for MLX models."""
     try:
+        safe_user_file(request.path)
         found = service.scan_directory(request.path)
         return found
     except Exception as e:
@@ -165,6 +172,7 @@ class ExportRequest(BaseModel):
 async def export_model(request: ExportRequest):
     """Export and quantize a model."""
     try:
+        safe_user_file(request.output_path)
         result = await service.export_model(request.model_id, request.output_path, request.q_bits)
         return result
     except Exception as e:

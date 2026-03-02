@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 from datetime import datetime, timezone
 
+from app.security import safe_id
+
 logger = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 1
@@ -67,6 +69,7 @@ class NotesService:
 
     def get_note(self, note_id: str) -> Optional[Dict[str, Any]]:
         """Return full note including content."""
+        safe_id(note_id)
         path = self.notes_dir / f"{note_id}.json"
         if not path.exists():
             return None
@@ -106,6 +109,7 @@ class NotesService:
         return note
 
     def delete_note(self, note_id: str) -> bool:
+        safe_id(note_id)
         path = self.notes_dir / f"{note_id}.json"
         if path.exists():
             path.unlink()

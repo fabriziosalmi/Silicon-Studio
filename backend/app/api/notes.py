@@ -19,12 +19,12 @@ class NoteUpdate(BaseModel):
 
 
 @router.get("/")
-async def list_notes():
+def list_notes():
     return service.list_notes()
 
 
 @router.get("/{note_id}")
-async def get_note(note_id: str):
+def get_note(note_id: str):
     note = service.get_note(note_id)
     if not note:
         raise HTTPException(status_code=404, detail="Note not found")
@@ -32,12 +32,12 @@ async def get_note(note_id: str):
 
 
 @router.post("/")
-async def create_note(req: NoteCreate):
+def create_note(req: NoteCreate):
     return service.create_note(title=req.title, content=req.content)
 
 
 @router.patch("/{note_id}")
-async def update_note(note_id: str, req: NoteUpdate):
+def update_note(note_id: str, req: NoteUpdate):
     updates = req.model_dump(exclude_none=True)
     note = service.update_note(note_id, updates)
     if not note:
@@ -46,7 +46,7 @@ async def update_note(note_id: str, req: NoteUpdate):
 
 
 @router.delete("/{note_id}")
-async def delete_note(note_id: str):
+def delete_note(note_id: str):
     if service.delete_note(note_id):
         return {"status": "deleted"}
     raise HTTPException(status_code=404, detail="Note not found")

@@ -29,11 +29,15 @@ function loadPersistedFeed(): FeedItem[] {
     const raw = sessionStorage.getItem(STORAGE_KEY_FEED)
     if (!raw) return []
     const items: FeedItem[] = JSON.parse(raw)
-    return items.map((it) =>
-      it.diffMeta?.status === 'pending'
-        ? { ...it, diffMeta: { ...it.diffMeta, status: 'rejected', rejectReason: 'Session lost (page refreshed)' } }
-        : it
-    )
+    return items.map((it) => {
+      if (it.diffMeta?.status === 'pending') {
+        return { ...it, diffMeta: { ...it.diffMeta, status: 'rejected', rejectReason: 'Session lost (page refreshed)' } }
+      }
+      if (it.escalationMeta?.status === 'pending') {
+        return { ...it, escalationMeta: { ...it.escalationMeta, status: 'responded', userMessage: '(session lost)' } }
+      }
+      return it
+    })
   } catch {
     return []
   }
@@ -103,6 +107,16 @@ export function AgentTerminal() {
       prev.map((it) =>
         it.diffMeta?.callId === callId
           ? { ...it, diffMeta: { ...it.diffMeta, status: approved ? 'approved' : 'rejected', rejectReason: reason } }
+          : it
+      )
+    )
+  }, [])
+
+  const handleEscalationResponded = useCallback((escalationId: string, userMessage: string) => {
+    setFeedItems((prev) =>
+      prev.map((it) =>
+        it.escalationMeta?.escalationId === escalationId
+          ? { ...it, escalationMeta: { ...it.escalationMeta, status: 'responded', userMessage } }
           : it
       )
     )
@@ -275,6 +289,20 @@ export function AgentTerminal() {
           }))
           break
 
+        case 'human_escalation':
+          addFeedItem({
+            id: crypto.randomUUID(),
+            type: 'human_escalation',
+            content: (d.reason as string) || 'The agent is stuck and needs your help.',
+            timestamp: Date.now(),
+            escalationMeta: {
+              escalationId: d.escalation_id as string,
+              reason: d.reason as string,
+              status: 'pending',
+            },
+          })
+          break
+
         case 'budget_exhausted':
           addFeedItem({
             id: crypto.randomUUID(),
@@ -420,6 +448,7 @@ export function AgentTerminal() {
             items={feedItems}
             sessionId={sessionId}
             onDiffDecided={handleDiffDecided}
+            onEscalationResponded={handleEscalationResponded}
           />
           <InputBar
             onSubmit={handleSubmit}

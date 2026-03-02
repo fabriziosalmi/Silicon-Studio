@@ -395,5 +395,15 @@ class RagService:
         return split_text(text, separators)
 
     def _save_collections(self, collections: List[Dict[str, Any]]):
-        with open(self.collections_file, "w") as f:
-            json.dump(collections, f, indent=2)
+        """Atomic write: temp file + os.replace to prevent corruption on crash."""
+        fd, tmp_path = tempfile.mkstemp(dir=str(self.rag_dir), suffix=".tmp")
+        try:
+            with os.fdopen(fd, "w") as f:
+                json.dump(collections, f, indent=2)
+            os.replace(tmp_path, self.collections_file)
+        except Exception:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+            raise
