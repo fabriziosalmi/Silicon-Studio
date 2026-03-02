@@ -110,6 +110,23 @@ function startBackend() {
         backendProcess.on('close', (code) => {
             log.info(`Backend process exited with code ${code}`);
             backendProcess = null;
+
+            // If backend crashes during startup before port was resolved,
+            // resolve with default so the renderer doesn't hang forever
+            if (portResolve) {
+                portResolve(8000);
+                portResolve = null;
+            }
+
+            // Non-zero exit during app lifecycle = fatal
+            if (code && code !== 0 && !isQuitting) {
+                const logPath = log.transports.file.getFile().path;
+                log.error(`Backend crashed with exit code ${code}`);
+                dialog.showErrorBox(
+                    'Backend Crashed',
+                    `The Python backend exited with code ${code}.\n\nCheck logs at:\n${logPath}`
+                );
+            }
         });
     }
 }
