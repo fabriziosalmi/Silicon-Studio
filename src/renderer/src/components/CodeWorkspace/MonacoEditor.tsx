@@ -1,5 +1,8 @@
-import { Suspense, lazy, useRef, useCallback } from 'react'
+import { Suspense, lazy, useRef, useCallback, type ComponentProps } from 'react'
 import { Loader2 } from 'lucide-react'
+import type MonacoEditorType from '@monaco-editor/react'
+
+type EditorProps = ComponentProps<typeof MonacoEditorType>
 
 const Editor = lazy(() => import('@monaco-editor/react'))
 
@@ -23,8 +26,10 @@ function EditorFallback() {
 }
 
 export function MonacoEditor({ filePath, content, language, onSave, onChange }: MonacoEditorProps) {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = useRef<any>(null)
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleEditorDidMount = useCallback((editor: any) => {
     editorRef.current = editor
 
@@ -45,31 +50,33 @@ export function MonacoEditor({ filePath, content, language, onSave, onChange }: 
     }
   }, [onChange])
 
+  const editorProps: EditorProps = {
+    height: '100%',
+    language,
+    value: content,
+    theme: 'vs-dark',
+    onMount: handleEditorDidMount,
+    onChange: handleChange,
+    options: {
+      fontSize: 13,
+      fontFamily: "'SF Mono', 'Fira Code', 'JetBrains Mono', monospace",
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      padding: { top: 8 },
+      lineNumbers: 'on',
+      renderLineHighlight: 'line',
+      bracketPairColorization: { enabled: true },
+      wordWrap: 'off',
+      tabSize: 2,
+      automaticLayout: true,
+      smoothScrolling: true,
+      cursorSmoothCaretAnimation: 'on',
+    },
+  }
+
   return (
     <Suspense fallback={<EditorFallback />}>
-      <Editor
-        height="100%"
-        language={language}
-        value={content}
-        theme="vs-dark"
-        onMount={handleEditorDidMount}
-        onChange={handleChange}
-        options={{
-          fontSize: 13,
-          fontFamily: "'SF Mono', 'Fira Code', 'JetBrains Mono', monospace",
-          minimap: { enabled: false },
-          scrollBeyondLastLine: false,
-          padding: { top: 8 },
-          lineNumbers: 'on',
-          renderLineHighlight: 'line',
-          bracketPairColorization: { enabled: true },
-          wordWrap: 'off',
-          tabSize: 2,
-          automaticLayout: true,
-          smoothScrolling: true,
-          cursorSmoothCaretAnimation: 'on',
-        }}
-      />
+      <Editor {...editorProps} />
     </Suspense>
   )
 }

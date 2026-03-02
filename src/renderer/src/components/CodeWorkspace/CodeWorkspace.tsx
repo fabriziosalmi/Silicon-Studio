@@ -23,7 +23,7 @@ export function CodeWorkspace() {
   )
   const [loading, setLoading] = useState(false)
   const [saveStatus, setSaveStatus] = useState<string | null>(null)
-  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>()
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
 
   // Listen for workspace directory changes from Settings
   useEffect(() => {
@@ -82,7 +82,7 @@ export function CodeWorkspace() {
     e?.stopPropagation()
     setOpenFiles(prev => prev.filter(f => f.path !== path))
     if (activeFile === path) {
-      setActiveFile(prev => {
+      setActiveFile(() => {
         const remaining = openFiles.filter(f => f.path !== path)
         return remaining.length > 0 ? remaining[remaining.length - 1].path : null
       })
