@@ -1,12 +1,11 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { PanelRightOpen, PanelRightClose, Trash2, TerminalSquare } from 'lucide-react'
+import { PanelRightOpen, PanelRightClose, Trash2, TerminalSquare, AlertCircle } from 'lucide-react'
 import { useGlobalState } from '../../context/GlobalState'
 import { apiClient } from '../../api/client'
 import { MessageFeed } from './MessageFeed'
 import { InputBar } from './InputBar'
 import type { TerminalMode } from './InputBar'
 import { TelemetrySidebar } from './TelemetrySidebar'
-import { EmptyState } from '../ui/EmptyState'
 import type { FeedItem, TelemetryData, SSEEvent } from './types'
 
 const EMPTY_TELEMETRY: TelemetryData = {
@@ -377,28 +376,6 @@ export function AgentTerminal() {
     }
   }, [sessionId])
 
-  // Terminal mode works without a model, agent mode requires one
-  if (mode === 'agent' && !activeModel) {
-    return (
-      <div className="h-full flex flex-col">
-        <div className="flex-1 flex items-center justify-center">
-          <EmptyState
-            icon={<TerminalSquare size={24} />}
-            title="No model loaded"
-            description="Load a model to use Agent mode, or switch to Terminal mode for direct bash access."
-          />
-        </div>
-        <InputBar
-          onSubmit={handleSubmit}
-          onStop={handleStop}
-          isRunning={isRunning}
-          mode={mode}
-          onModeChange={handleModeChange}
-        />
-      </div>
-    )
-  }
-
   return (
     <div className="h-full flex flex-col">
       {/* Terminal header */}
@@ -440,6 +417,14 @@ export function AgentTerminal() {
           </button>
         </div>
       </div>
+
+      {/* Inline warning when agent mode has no model */}
+      {mode === 'agent' && !activeModel && (
+        <div className="px-4 py-2 bg-amber-500/10 border-b border-amber-500/20 flex items-center gap-2 shrink-0">
+          <AlertCircle size={13} className="text-amber-400 shrink-0" />
+          <span className="text-xs text-amber-400">No model loaded — load one from the Models tab, or switch to Terminal mode.</span>
+        </div>
+      )}
 
       {/* Main area */}
       <div className="flex-1 flex overflow-hidden">

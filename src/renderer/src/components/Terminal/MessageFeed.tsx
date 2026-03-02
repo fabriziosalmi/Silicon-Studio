@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, memo, useCallback } from 'react'
-import { User, Bot, TerminalSquare, AlertCircle, Info, AlertTriangle, Send } from 'lucide-react'
+import { User, Bot, TerminalSquare, AlertCircle, Info, AlertTriangle, Send, Cpu } from 'lucide-react'
 import { StreamingMarkdown } from './StreamingMarkdown'
 import { HolographicDiff } from './HolographicDiff'
 import { apiClient } from '../../api/client'
@@ -141,20 +141,32 @@ const FeedItemView = memo(function FeedItemView({
 
     case 'tool_start':
       return (
-        <div className="flex items-center gap-2">
-          <TerminalSquare size={12} className="text-yellow-500 shrink-0" />
-          <span className="text-xs text-yellow-500/80 font-mono">{item.content}</span>
+        <div className="flex items-center gap-2 mt-1">
+          <Cpu size={11} className="text-yellow-500/70 shrink-0" />
+          <span className="text-[10px] text-yellow-500/60 font-mono">NanoCore Executed</span>
         </div>
       )
 
     case 'tool_output':
       return (
-        <div>
-          <pre className="text-xs text-green-300/90 font-mono select-text whitespace-pre-wrap break-words leading-relaxed">
-            {item.content}
-          </pre>
+        <div className="rounded-lg overflow-hidden border border-white/[0.06]">
+          {/* Command header */}
+          {item.toolMeta?.command && (
+            <div className="flex items-center gap-2 px-3 py-1.5 bg-[#111] border-b border-white/[0.04]">
+              <TerminalSquare size={11} className="text-gray-500 shrink-0" />
+              <span className="text-[11px] text-gray-400 font-mono truncate">$ {item.toolMeta.command}</span>
+            </div>
+          )}
+          {/* Output body */}
+          <div className="bg-black/60 px-3 py-2 overflow-x-auto">
+            <pre className="text-xs text-green-300/90 font-mono select-text whitespace-pre-wrap break-words leading-relaxed">
+              {item.content}
+            </pre>
+          </div>
           {item.toolMeta?.exitCode !== undefined && item.toolMeta.exitCode !== 0 && (
-            <span className="text-[10px] text-red-400">exit code: {item.toolMeta.exitCode}</span>
+            <div className="px-3 py-1 bg-red-500/5 border-t border-red-500/10">
+              <span className="text-[10px] text-red-400 font-mono">exit code: {item.toolMeta.exitCode}</span>
+            </div>
           )}
         </div>
       )
