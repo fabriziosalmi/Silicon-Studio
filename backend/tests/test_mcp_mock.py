@@ -9,6 +9,11 @@ import asyncio
 from unittest.mock import patch, AsyncMock, MagicMock
 from app.mcp.client import MCPClient, MCP_TIMEOUT
 
+mcp = pytest.importorskip("mcp", reason="mcp SDK not installed")
+pytestmark = pytest.mark.skipif(
+    not mcp, reason="mcp SDK required for these tests"
+)
+
 
 @pytest.fixture
 def mcp_client():
@@ -54,8 +59,8 @@ async def test_list_tools_returns_schema(mcp_client):
     mock_stdio.__aenter__ = AsyncMock(return_value=(AsyncMock(), AsyncMock()))
     mock_stdio.__aexit__ = AsyncMock(return_value=False)
 
-    with patch("app.mcp.client.stdio_client", return_value=mock_stdio), \
-         patch("app.mcp.client.ClientSession", return_value=mock_session):
+    with patch("mcp.client.stdio.stdio_client", return_value=mock_stdio), \
+         patch("mcp.ClientSession", return_value=mock_session):
         tools = await mcp_client.connect_and_list_tools("node", ["server.js"])
 
     assert len(tools) == 2
@@ -81,8 +86,8 @@ async def test_execute_tool_returns_result(mcp_client):
     mock_stdio.__aenter__ = AsyncMock(return_value=(AsyncMock(), AsyncMock()))
     mock_stdio.__aexit__ = AsyncMock(return_value=False)
 
-    with patch("app.mcp.client.stdio_client", return_value=mock_stdio), \
-         patch("app.mcp.client.ClientSession", return_value=mock_session):
+    with patch("mcp.client.stdio.stdio_client", return_value=mock_stdio), \
+         patch("mcp.ClientSession", return_value=mock_session):
         result = await mcp_client.execute_tool(
             "node", ["server.js"], None,
             "read_file", {"path": "/tmp/test.txt"},
@@ -107,8 +112,8 @@ async def test_timeout_on_initialize(mcp_client):
     mock_stdio.__aenter__ = AsyncMock(return_value=(AsyncMock(), AsyncMock()))
     mock_stdio.__aexit__ = AsyncMock(return_value=False)
 
-    with patch("app.mcp.client.stdio_client", return_value=mock_stdio), \
-         patch("app.mcp.client.ClientSession", return_value=mock_session), \
+    with patch("mcp.client.stdio.stdio_client", return_value=mock_stdio), \
+         patch("mcp.ClientSession", return_value=mock_session), \
          patch("app.mcp.client.MCP_TIMEOUT", 1):  # Override to 1s for fast test
         with pytest.raises(asyncio.TimeoutError):
             await mcp_client.connect_and_list_tools("node", ["slow-server.js"])
@@ -130,8 +135,8 @@ async def test_timeout_on_tool_execution(mcp_client):
     mock_stdio.__aenter__ = AsyncMock(return_value=(AsyncMock(), AsyncMock()))
     mock_stdio.__aexit__ = AsyncMock(return_value=False)
 
-    with patch("app.mcp.client.stdio_client", return_value=mock_stdio), \
-         patch("app.mcp.client.ClientSession", return_value=mock_session), \
+    with patch("mcp.client.stdio.stdio_client", return_value=mock_stdio), \
+         patch("mcp.ClientSession", return_value=mock_session), \
          patch("app.mcp.client.MCP_TIMEOUT", 1):
         with pytest.raises(asyncio.TimeoutError):
             await mcp_client.execute_tool(
@@ -153,7 +158,7 @@ async def test_env_passed_to_server():
         # Return a mock that will fail (we just want to capture params)
         raise ConnectionError("test capture only")
 
-    with patch("app.mcp.client.stdio_client", side_effect=fake_stdio_client):
+    with patch("mcp.client.stdio.stdio_client", side_effect=fake_stdio_client):
         with pytest.raises(ConnectionError):
             await client.connect_and_list_tools(
                 "npx", ["-y", "@mcp/server"],

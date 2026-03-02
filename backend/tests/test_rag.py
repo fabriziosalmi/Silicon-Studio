@@ -62,8 +62,8 @@ def test_ingest_nonexistent_collection(rag_service, temp_text_files):
 
 def test_ingest_nonexistent_files(rag_service):
     col = rag_service.create_collection("Empty")
-    result = rag_service.ingest_files(col["id"], ["/nonexistent/file.txt"], 512, 0)
-    assert result["chunks"] == 0
+    with pytest.raises(ValueError, match="No text could be extracted"):
+        rag_service.ingest_files(col["id"], ["/nonexistent/file.txt"], 512, 0)
 
 
 def test_ingest_directory(rag_service, temp_text_files, temp_dir):

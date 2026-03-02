@@ -41,7 +41,7 @@ def test_concurrent_conversation_saves(temp_conversations_dir):
     import concurrent.futures
 
     def update_title(i):
-        svc.update_conversation(conv_id, title=f"Update-{i}")
+        svc.update_conversation(conv_id, {"title": f"Update-{i}"})
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as pool:
         futures = [pool.submit(update_title, i) for i in range(100)]
@@ -75,7 +75,7 @@ def test_concurrent_note_saves(temp_notes_dir):
     import concurrent.futures
 
     def update_content(i):
-        svc.update_note(note_id, content=f"Content version {i}")
+        svc.update_note(note_id, {"content": f"Content version {i}"})
 
     with concurrent.futures.ThreadPoolExecutor(max_workers=20) as pool:
         futures = [pool.submit(update_content, i) for i in range(100)]

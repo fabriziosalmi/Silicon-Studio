@@ -5,10 +5,10 @@ without hitting real external APIs.
 """
 
 import pytest
-import asyncio
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch, MagicMock, AsyncMock
 from fastapi.testclient import TestClient
+from concurrent.futures import ThreadPoolExecutor
 from main import app
 
 client = TestClient(app)
@@ -21,24 +21,26 @@ def test_web_search_timeout_returns_warning():
     """If DDG hangs, the endpoint should return empty results + warning (not 500)."""
 
     def slow_ddg(query, max_results):
-        time.sleep(15)  # longer than _SEARCH_TIMEOUT
+        time.sleep(3)  # longer than patched _SEARCH_TIMEOUT of 1s
         return []
 
-    with patch("app.api.search._SEARCH_TIMEOUT", 1):  # 1s timeout for fast test
-        with patch("app.api.search.DDGS") as mock_ddgs_cls:
-            mock_instance = MagicMock()
-            mock_instance.__enter__ = MagicMock(return_value=mock_instance)
-            mock_instance.__exit__ = MagicMock(return_value=False)
-            mock_instance.text = slow_ddg
-            mock_ddgs_cls.return_value = mock_instance
+    mock_instance = MagicMock()
+    mock_instance.__enter__ = MagicMock(return_value=mock_instance)
+    mock_instance.__exit__ = MagicMock(return_value=False)
+    mock_instance.text = slow_ddg
 
-            # Patch the import check to succeed
-            with patch.dict("sys.modules", {"duckduckgo_search": MagicMock(DDGS=mock_ddgs_cls)}):
-                resp = client.post("/api/search/web", json={
-                    "query": "test query",
-                    "max_results": 3,
-                    "extract_content": False,
-                })
+    mock_ddgs_cls = MagicMock(return_value=mock_instance)
+
+    # Use a fresh executor so slow threads don't leak into other tests
+    fresh_executor = ThreadPoolExecutor(max_workers=2)
+    with patch("app.api.search._SEARCH_TIMEOUT", 1), \
+         patch("app.api.search._search_executor", fresh_executor), \
+         patch("duckduckgo_search.DDGS", mock_ddgs_cls):
+        resp = client.post("/api/search/web", json={
+            "query": "test query",
+            "max_results": 3,
+            "extract_content": False,
+        })
 
     assert resp.status_code == 200
     data = resp.json()
@@ -48,19 +50,19 @@ def test_web_search_timeout_returns_warning():
 
 def test_web_search_exception_returns_warning():
     """If DDG throws (e.g. rate limit), return empty results + warning."""
-    with patch.dict("sys.modules", {"duckduckgo_search": MagicMock()}):
-        with patch("app.api.search.DDGS") as mock_ddgs_cls:
-            mock_instance = MagicMock()
-            mock_instance.__enter__ = MagicMock(return_value=mock_instance)
-            mock_instance.__exit__ = MagicMock(return_value=False)
-            mock_instance.text = MagicMock(side_effect=Exception("429 Too Many Requests"))
-            mock_ddgs_cls.return_value = mock_instance
+    mock_instance = MagicMock()
+    mock_instance.__enter__ = MagicMock(return_value=mock_instance)
+    mock_instance.__exit__ = MagicMock(return_value=False)
+    mock_instance.text = MagicMock(side_effect=Exception("429 Too Many Requests"))
 
-            resp = client.post("/api/search/web", json={
-                "query": "rate limited query",
-                "max_results": 3,
-                "extract_content": False,
-            })
+    mock_ddgs_cls = MagicMock(return_value=mock_instance)
+
+    with patch("duckduckgo_search.DDGS", mock_ddgs_cls):
+        resp = client.post("/api/search/web", json={
+            "query": "rate limited query",
+            "max_results": 3,
+            "extract_content": False,
+        })
 
     assert resp.status_code == 200
     data = resp.json()
@@ -97,19 +99,19 @@ def test_web_search_success():
         {"title": "Result 2", "body": "Snippet 2", "href": "https://example.com/2"},
     ]
 
-    with patch.dict("sys.modules", {"duckduckgo_search": MagicMock()}):
-        with patch("app.api.search.DDGS") as mock_ddgs_cls:
-            mock_instance = MagicMock()
-            mock_instance.__enter__ = MagicMock(return_value=mock_instance)
-            mock_instance.__exit__ = MagicMock(return_value=False)
-            mock_instance.text = MagicMock(return_value=fake_results)
-            mock_ddgs_cls.return_value = mock_instance
+    mock_instance = MagicMock()
+    mock_instance.__enter__ = MagicMock(return_value=mock_instance)
+    mock_instance.__exit__ = MagicMock(return_value=False)
+    mock_instance.text = MagicMock(return_value=fake_results)
 
-            resp = client.post("/api/search/web", json={
-                "query": "test query",
-                "max_results": 2,
-                "extract_content": False,
-            })
+    mock_ddgs_cls = MagicMock(return_value=mock_instance)
+
+    with patch("duckduckgo_search.DDGS", mock_ddgs_cls):
+        resp = client.post("/api/search/web", json={
+            "query": "test query",
+            "max_results": 2,
+            "extract_content": False,
+        })
 
     assert resp.status_code == 200
     data = resp.json()
@@ -126,21 +128,24 @@ def test_deep_search_timeout_returns_warning():
     """Deep search timeout should degrade gracefully like web search."""
 
     def slow_ddg(query, max_results):
-        time.sleep(25)
+        time.sleep(3)  # longer than patched _SEARCH_TIMEOUT of 1s
         return []
 
-    with patch("app.api.search._SEARCH_TIMEOUT", 1):
-        with patch("app.api.search.DDGS") as mock_ddgs_cls:
-            mock_instance = MagicMock()
-            mock_instance.__enter__ = MagicMock(return_value=mock_instance)
-            mock_instance.__exit__ = MagicMock(return_value=False)
-            mock_instance.text = slow_ddg
-            mock_ddgs_cls.return_value = mock_instance
+    mock_instance = MagicMock()
+    mock_instance.__enter__ = MagicMock(return_value=mock_instance)
+    mock_instance.__exit__ = MagicMock(return_value=False)
+    mock_instance.text = slow_ddg
 
-            with patch.dict("sys.modules", {"duckduckgo_search": MagicMock(DDGS=mock_ddgs_cls)}):
-                resp = client.post("/api/search/deep", json={
-                    "query": "deep timeout test",
-                })
+    mock_ddgs_cls = MagicMock(return_value=mock_instance)
+
+    # Use a fresh executor so slow threads don't leak into other tests
+    fresh_executor = ThreadPoolExecutor(max_workers=2)
+    with patch("app.api.search._SEARCH_TIMEOUT", 1), \
+         patch("app.api.search._search_executor", fresh_executor), \
+         patch("duckduckgo_search.DDGS", mock_ddgs_cls):
+        resp = client.post("/api/search/deep", json={
+            "query": "deep timeout test",
+        })
 
     assert resp.status_code == 200
     data = resp.json()
@@ -152,26 +157,28 @@ def test_deep_search_timeout_returns_warning():
 
 
 def test_content_extraction_failure_returns_snippets():
-    """If trafilatura/aiohttp crash during extraction, snippets should still be returned."""
+    """If extraction fails, snippets from DDG should still be returned."""
     fake_results = [
         {"title": "Page", "body": "Snippet text", "href": "https://example.com"},
     ]
 
-    with patch.dict("sys.modules", {"duckduckgo_search": MagicMock()}):
-        with patch("app.api.search.DDGS") as mock_ddgs_cls:
-            mock_instance = MagicMock()
-            mock_instance.__enter__ = MagicMock(return_value=mock_instance)
-            mock_instance.__exit__ = MagicMock(return_value=False)
-            mock_instance.text = MagicMock(return_value=fake_results)
-            mock_ddgs_cls.return_value = mock_instance
+    mock_instance = MagicMock()
+    mock_instance.__enter__ = MagicMock(return_value=mock_instance)
+    mock_instance.__exit__ = MagicMock(return_value=False)
+    mock_instance.text = MagicMock(return_value=fake_results)
 
-            # Mock trafilatura import to raise
-            with patch("app.api.search._fetch_and_extract", side_effect=Exception("extraction crashed")):
-                resp = client.post("/api/search/web", json={
-                    "query": "extract fail test",
-                    "max_results": 1,
-                    "extract_content": True,
-                })
+    mock_ddgs_cls = MagicMock(return_value=mock_instance)
+
+    # Mock _fetch_and_extract as an AsyncMock that raises
+    mock_extract = AsyncMock(side_effect=Exception("extraction crashed"))
+
+    with patch("duckduckgo_search.DDGS", mock_ddgs_cls), \
+         patch("app.api.search._fetch_and_extract", mock_extract):
+        resp = client.post("/api/search/web", json={
+            "query": "extract fail test",
+            "max_results": 1,
+            "extract_content": True,
+        })
 
     assert resp.status_code == 200
     data = resp.json()

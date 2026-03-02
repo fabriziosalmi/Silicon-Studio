@@ -230,7 +230,11 @@ class RagService:
                 )
 
         scored.sort(key=lambda x: x["score"], reverse=True)
-        return scored[:n]
+        if scored:
+            return scored[:n]
+        # BM25 can score 0 when query terms appear in every chunk (IDF→0);
+        # fall back to simple keyword matching in that case.
+        return self._keyword_search(chunks, query_text, n)
 
     def _keyword_search(
         self, chunks: List[str], query_text: str, n: int = 20
