@@ -32,6 +32,7 @@ SSEEventType = Literal[
     "human_escalation",
     "telemetry_update",
     "budget_exhausted",
+    "auto_retry",
     "error",
     "done",
 ]

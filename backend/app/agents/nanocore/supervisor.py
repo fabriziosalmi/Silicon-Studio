@@ -30,6 +30,8 @@ _THINK_OPEN_RE = re.compile(r'</?think[^>]*>')
 MAX_TOOL_OUTPUT_CHARS = 4000
 # Max seconds to wait for diff approval before auto-rejecting
 MAX_APPROVAL_WAIT_SECS = 300  # 5 minutes
+# Self-healing: max consecutive bash failures before giving up
+MAX_AUTO_RETRIES = 3
 
 
 def _strip_think_tags(text: str) -> str:
@@ -106,6 +108,10 @@ class SupervisorAgent:
         self._trajectory: list[TrajectoryEntry] = []
         self._total_tokens = 0
         self._start_time = 0.0
+
+        # Self-healing loop state
+        self._consecutive_bash_failures = 0
+        self._last_failed_stderr = ""
 
         # Fix 2: guardrails
         self.guardrails = LoopGuardrails(max_total_tokens=max_total_tokens)
@@ -417,21 +423,51 @@ class SupervisorAgent:
                         output_lines = []
                         exit_code = 0
                         async for stream, text in run_bash(command):
+                            if stream == "exit_code":
+                                exit_code = int(text)
+                                continue
                             yield _sse("tool_log", {"call_id": call_id, "stream": stream, "text": text})
                             output_lines.append(text)
-                            if stream == "stderr" and "Blocked:" in text:
-                                exit_code = 1
 
                         yield _sse("tool_done", {"call_id": call_id, "exit_code": exit_code})
 
                         raw_output = "".join(output_lines)
                         tool_results.append(f"[bash output]\n{_truncate(raw_output)}")
 
-                        # Fix 2: track errors for loop detection
+                        # --- Self-Healing Loop ---
                         if exit_code != 0:
+                            self._consecutive_bash_failures += 1
+                            self._last_failed_stderr = raw_output[-2000:]  # keep last 2k chars
+                            attempt = self._consecutive_bash_failures
+
+                            if attempt <= MAX_AUTO_RETRIES:
+                                yield _sse("auto_retry", {
+                                    "attempt": attempt,
+                                    "max_attempts": MAX_AUTO_RETRIES,
+                                    "command": command[:200],
+                                    "status": "retrying",
+                                })
+                                tool_results.append(
+                                    f"[SELF-HEAL] The command exited with code {exit_code} "
+                                    f"(attempt {attempt}/{MAX_AUTO_RETRIES}). "
+                                    f"Analyze the error output above, fix the source code that caused the failure, "
+                                    f"then re-run the same command to verify your fix."
+                                )
+                            else:
+                                yield _sse("auto_retry", {
+                                    "attempt": attempt,
+                                    "max_attempts": MAX_AUTO_RETRIES,
+                                    "command": command[:200],
+                                    "status": "exhausted",
+                                })
+                                tool_results.append(
+                                    f"[SELF-HEAL] Failed {attempt} times. Stop retrying. "
+                                    f"Summarize the root cause and what you tried."
+                                )
+
+                            # Fix 2: also feed into guardrails error tracking
                             self.guardrails.record_error(raw_output)
                             if self.guardrails.is_stuck_on_same_error():
-                                # Pause and ask the user for help
                                 esc_id = str(uuid.uuid4())[:8]
                                 async for evt in self._wait_for_human_escalation(
                                     esc_id,
@@ -449,6 +485,17 @@ class SupervisorAgent:
                                     break
                                 else:
                                     tool_results.append(self.guardrails.rubber_duck_message())
+                        else:
+                            # Success — reset self-healing counter
+                            if self._consecutive_bash_failures > 0:
+                                yield _sse("auto_retry", {
+                                    "attempt": self._consecutive_bash_failures,
+                                    "max_attempts": MAX_AUTO_RETRIES,
+                                    "command": command[:200],
+                                    "status": "resolved",
+                                })
+                            self._consecutive_bash_failures = 0
+                            self._last_failed_stderr = ""
 
                         self._trajectory.append(TrajectoryEntry(
                             agent="supervisor", action="run_bash",

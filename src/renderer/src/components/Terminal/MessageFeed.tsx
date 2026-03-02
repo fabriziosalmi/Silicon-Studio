@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, memo, useCallback } from 'react'
-import { User, Bot, TerminalSquare, AlertCircle, Info, AlertTriangle, Send, Cpu } from 'lucide-react'
+import { User, Bot, TerminalSquare, AlertCircle, Info, AlertTriangle, Send, Cpu, RefreshCw, XCircle, CheckCircle2 } from 'lucide-react'
 import { StreamingMarkdown } from './StreamingMarkdown'
 import { HolographicDiff } from './HolographicDiff'
 import { apiClient } from '../../api/client'
@@ -179,6 +179,45 @@ const FeedItemView = memo(function FeedItemView({
           onDecided={onDiffDecided}
         />
       ) : null
+
+    case 'auto_retry': {
+      const meta = item.autoRetryMeta
+      if (!meta) return null
+
+      if (meta.status === 'retrying') {
+        return (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-500/5 border border-amber-500/15 rounded-lg">
+            <RefreshCw size={12} className="text-amber-400 animate-spin" />
+            <span className="text-xs text-amber-400 font-mono">
+              Self-heal attempt {meta.attempt}/{meta.maxAttempts}
+            </span>
+            <span className="text-[10px] text-gray-500 truncate max-w-[300px]">{meta.command}</span>
+          </div>
+        )
+      }
+
+      if (meta.status === 'resolved') {
+        return (
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-emerald-500/5 border border-emerald-500/15 rounded-lg">
+            <CheckCircle2 size={12} className="text-emerald-400" />
+            <span className="text-xs text-emerald-400 font-mono">
+              Fixed after {meta.attempt} {meta.attempt === 1 ? 'retry' : 'retries'}
+            </span>
+          </div>
+        )
+      }
+
+      // exhausted
+      return (
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-red-500/5 border border-red-500/15 rounded-lg">
+          <XCircle size={12} className="text-red-400" />
+          <span className="text-xs text-red-400 font-mono">
+            Self-heal failed after {meta.attempt} attempts
+          </span>
+          <span className="text-[10px] text-gray-500 truncate max-w-[300px]">{meta.command}</span>
+        </div>
+      )
+    }
 
     case 'human_escalation':
       return item.escalationMeta ? (

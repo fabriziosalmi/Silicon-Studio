@@ -302,6 +302,34 @@ export function AgentTerminal() {
           })
           break
 
+        case 'auto_retry': {
+          const status = d.status as string
+          const attempt = d.attempt as number
+          const maxAttempts = d.max_attempts as number
+          const cmd = (d.command as string) || ''
+
+          if (status === 'resolved') {
+            // Update the last retrying item to resolved
+            setFeedItems((prev) => {
+              const lastRetryIdx = [...prev].reverse().findIndex((it) => it.type === 'auto_retry' && it.autoRetryMeta?.status === 'retrying')
+              if (lastRetryIdx === -1) return prev
+              const idx = prev.length - 1 - lastRetryIdx
+              return prev.map((it, i) =>
+                i === idx ? { ...it, autoRetryMeta: { ...it.autoRetryMeta!, status: 'resolved' } } : it
+              )
+            })
+          } else {
+            addFeedItem({
+              id: crypto.randomUUID(),
+              type: 'auto_retry',
+              content: cmd,
+              timestamp: Date.now(),
+              autoRetryMeta: { attempt, maxAttempts, command: cmd, status: status as 'retrying' | 'exhausted' },
+            })
+          }
+          break
+        }
+
         case 'budget_exhausted':
           addFeedItem({
             id: crypto.randomUUID(),

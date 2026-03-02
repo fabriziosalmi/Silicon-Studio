@@ -70,7 +70,7 @@ Create document collections with chunk-based retrieval. Toggle per-conversation 
 Add stdio-transport MCP servers. Discover and test tools. Generate fine-tuning data from tool schemas.
 
 ### Agent Terminal
-Dual-mode: direct bash and NanoCore AI agent. Streaming output, diff proposals with human approval, sandboxed execution.
+Dual-mode: direct bash and NanoCore AI agent. Streaming output, diff proposals with human approval, sandboxed execution. Self-healing loop: when a command fails, the agent automatically reads the error, fixes the code, and retries — up to 3 times.
 
 ### Notes
 Markdown editor with live preview, multi-note management, send to chat.

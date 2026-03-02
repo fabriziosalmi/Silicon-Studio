@@ -101,6 +101,7 @@ async def run_bash(command: str, timeout: int = 60) -> AsyncGenerator[tuple[str,
     block_reason = _is_blocked(command)
     if block_reason:
         yield ("stderr", f"{block_reason}\n")
+        yield ("exit_code", "1")
         return
 
     if _is_destructive(command):
@@ -150,6 +151,7 @@ async def run_bash(command: str, timeout: int = 60) -> AsyncGenerator[tuple[str,
                 return b""
             raise
 
+    timed_out = False
     try:
         while True:
             try:
@@ -159,8 +161,9 @@ async def run_bash(command: str, timeout: int = 60) -> AsyncGenerator[tuple[str,
                 )
             except asyncio.TimeoutError:
                 yield ("stderr", f"Command timed out after {timeout}s\n")
+                timed_out = True
                 proc.kill()
-                return
+                break
             except OSError:
                 # PTY closed unexpectedly
                 break
@@ -189,6 +192,13 @@ async def run_bash(command: str, timeout: int = 60) -> AsyncGenerator[tuple[str,
             await proc.wait()
         except Exception:
             pass
+
+    # Yield the real exit code so the supervisor can detect failures
+    if timed_out:
+        yield ("exit_code", "124")  # standard timeout exit code
+    else:
+        code = proc.returncode if proc.returncode is not None else -1
+        yield ("exit_code", str(code))
 
 
 async def read_file(file_path: str, max_lines: int = 300) -> dict:

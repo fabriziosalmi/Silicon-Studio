@@ -7,6 +7,7 @@ export type FeedItemType =
   | 'tool_output'
   | 'diff_proposal'
   | 'human_escalation'
+  | 'auto_retry'
   | 'error'
   | 'info'
 
@@ -34,6 +35,13 @@ export interface EscalationMetadata {
   userMessage?: string
 }
 
+export interface AutoRetryMetadata {
+  attempt: number
+  maxAttempts: number
+  command: string
+  status: 'retrying' | 'resolved' | 'exhausted'
+}
+
 export interface FeedItem {
   id: string
   type: FeedItemType
@@ -42,6 +50,7 @@ export interface FeedItem {
   toolMeta?: ToolMetadata
   diffMeta?: DiffMetadata
   escalationMeta?: EscalationMetadata
+  autoRetryMeta?: AutoRetryMetadata
 }
 
 export interface TelemetryAction {
