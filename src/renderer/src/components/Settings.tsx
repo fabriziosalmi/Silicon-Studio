@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Card } from './ui/Card'
 import { ToggleSwitch } from './ui/ToggleSwitch'
 import { apiClient } from '../api/client'
-import { Settings2, MessageSquare, Brain, RotateCcw, Info, Server, Plus, Trash2, Loader2, Gauge, Globe, Play, Square, RefreshCcw, HardDrive } from 'lucide-react'
+import { Settings2, MessageSquare, Brain, RotateCcw, Info, Server, Plus, Trash2, Loader2, Gauge, Globe, Play, Square, RefreshCcw, HardDrive, FolderSearch, FolderOpen } from 'lucide-react'
 import type { IndexerSource, IndexerStatus } from '../api/client'
 
 const CHAT_SETTINGS_KEY = 'silicon-studio-chat-settings'
@@ -446,6 +446,126 @@ function WebIndexerSection() {
     )
 }
 
+function CodebaseIndexSection() {
+    const [status, setStatus] = useState<{ indexed: boolean; directory?: string; file_count?: number; chunk_count?: number; indexed_at?: number; has_embeddings?: boolean } | null>(null)
+    const [loading, setLoading] = useState(true)
+    const [indexing, setIndexing] = useState(false)
+    const [indexResult, setIndexResult] = useState<string | null>(null)
+
+    const fetchStatus = async () => {
+        try {
+            const s = await apiClient.codebase.getStatus()
+            setStatus(s)
+        } catch { setStatus({ indexed: false }) }
+        finally { setLoading(false) }
+    }
+
+    useEffect(() => { fetchStatus() }, [])
+
+    const handlePickDirectory = async () => {
+        try {
+            const api = (window as any).electronAPI
+            const result = await api?.showOpenDialog?.({ properties: ['openDirectory'] })
+            if (result?.filePaths?.[0]) {
+                handleIndex(result.filePaths[0])
+            }
+        } catch {
+            // Fallback: prompt for path
+            const dir = prompt('Enter absolute path to your project directory:')
+            if (dir?.trim()) handleIndex(dir.trim())
+        }
+    }
+
+    const handleIndex = async (directory: string) => {
+        setIndexing(true)
+        setIndexResult(null)
+        try {
+            const result = await apiClient.codebase.index(directory)
+            setIndexResult(`Indexed ${result.file_count} files into ${result.chunk_count} chunks`)
+            // Store workspace dir for the Code tab
+            localStorage.setItem('silicon-studio-workspace-dir', directory)
+            window.dispatchEvent(new CustomEvent('workspace-dir-changed', { detail: directory }))
+            fetchStatus()
+        } catch (err) {
+            setIndexResult(err instanceof Error ? err.message : 'Indexing failed')
+        } finally { setIndexing(false) }
+    }
+
+    const handleDelete = async () => {
+        if (!confirm('Delete the codebase index? You can re-index at any time.')) return
+        try {
+            await apiClient.codebase.deleteIndex()
+            localStorage.removeItem('silicon-studio-workspace-dir')
+            window.dispatchEvent(new CustomEvent('workspace-dir-changed', { detail: null }))
+            setStatus({ indexed: false })
+            setIndexResult(null)
+        } catch { /* ignore */ }
+    }
+
+    return (
+        <Card className="p-5">
+            <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                    <span className="text-blue-400"><FolderSearch size={16} /></span>
+                    <h3 className="text-sm font-bold text-white uppercase tracking-wide">Codebase Index</h3>
+                </div>
+                <div className="flex items-center gap-2">
+                    <button
+                        onClick={handlePickDirectory}
+                        disabled={indexing}
+                        className="flex items-center gap-1 px-2 py-1 rounded text-xs text-blue-400 hover:bg-blue-500/10 transition-colors disabled:opacity-50"
+                    >
+                        {indexing ? <Loader2 size={14} className="animate-spin" /> : <FolderOpen size={14} />}
+                        {indexing ? 'Indexing...' : status?.indexed ? 'Re-index' : 'Select Directory'}
+                    </button>
+                    {status?.indexed && (
+                        <button
+                            onClick={handleDelete}
+                            className="flex items-center gap-1 px-2 py-1 rounded text-xs text-red-400 hover:bg-red-500/10 transition-colors"
+                        >
+                            <Trash2 size={14} /> Delete
+                        </button>
+                    )}
+                </div>
+            </div>
+
+            {loading ? (
+                <div className="flex justify-center py-4">
+                    <Loader2 size={16} className="animate-spin text-gray-500" />
+                </div>
+            ) : status?.indexed ? (
+                <div className="space-y-2">
+                    <div className="flex items-center gap-4 text-[10px] text-gray-500">
+                        <span className="flex items-center gap-1 text-green-500">
+                            <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+                            Indexed
+                        </span>
+                        <span>{status.file_count} files</span>
+                        <span>{status.chunk_count} chunks</span>
+                        {status.has_embeddings && <span className="text-blue-400">vector search enabled</span>}
+                        {status.indexed_at && (
+                            <span>Last indexed: {new Date(status.indexed_at * 1000).toLocaleString()}</span>
+                        )}
+                    </div>
+                    <div className="flex items-center px-3 py-2 rounded-lg bg-black/30 border border-white/5">
+                        <span className="text-xs text-gray-400 font-mono truncate">{status.directory}</span>
+                    </div>
+                </div>
+            ) : (
+                <p className="text-sm text-gray-500">
+                    Select a project directory to enable semantic code search in the NanoCore terminal. AST-aware chunking for Python, line-based for other languages.
+                </p>
+            )}
+
+            {indexResult && (
+                <div className="mt-3 text-xs text-gray-400 bg-black/20 rounded px-3 py-2">
+                    {indexResult}
+                </div>
+            )}
+        </Card>
+    )
+}
+
 export function Settings() {
     const [chat, setChat] = useState<ChatDefaults>(() => {
         try {
@@ -643,6 +763,9 @@ export function Settings() {
 
             {/* MCP Servers */}
             <MCPServersSection />
+
+            {/* Codebase Index */}
+            <CodebaseIndexSection />
 
             {/* Web Indexer */}
             <WebIndexerSection />

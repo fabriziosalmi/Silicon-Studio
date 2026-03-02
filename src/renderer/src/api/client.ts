@@ -738,6 +738,65 @@ export const apiClient = {
             return res.json();
         },
     },
+    codebase: {
+        index: async (directory: string): Promise<{ status: string; directory: string; file_count: number; chunk_count: number }> => {
+            const res = await fetch(`${API_BASE}/api/codebase/index`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ directory })
+            });
+            await throwIfNotOk(res, 'Failed to index codebase');
+            return res.json();
+        },
+        search: async (query: string, topK: number = 10): Promise<{ results: { file_path: string; start_line: number; end_line: number; symbol: string; kind: string; content: string; score: number; method: string }[] }> => {
+            const res = await fetch(`${API_BASE}/api/codebase/search`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ query, top_k: topK })
+            });
+            await throwIfNotOk(res, 'Failed to search codebase');
+            return res.json();
+        },
+        getStatus: async (): Promise<{ indexed: boolean; directory?: string; file_count?: number; chunk_count?: number; indexed_at?: number; has_embeddings?: boolean }> => {
+            const res = await fetch(`${API_BASE}/api/codebase/status`);
+            await throwIfNotOk(res, 'Failed to fetch codebase status');
+            return res.json();
+        },
+        deleteIndex: async (): Promise<{ status: string }> => {
+            const res = await fetch(`${API_BASE}/api/codebase/index`, { method: 'DELETE' });
+            await throwIfNotOk(res, 'Failed to delete codebase index');
+            return res.json();
+        },
+    },
+    workspace: {
+        tree: async (directory: string, maxDepth: number = 5): Promise<{ name: string; path: string; type: 'file' | 'dir'; children?: any[] }> => {
+            const res = await fetch(`${API_BASE}/api/workspace/tree`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ directory, max_depth: maxDepth })
+            });
+            await throwIfNotOk(res, 'Failed to fetch file tree');
+            return res.json();
+        },
+        readFile: async (path: string): Promise<{ content: string; language: string }> => {
+            const res = await fetch(`${API_BASE}/api/workspace/read`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path })
+            });
+            await throwIfNotOk(res, 'Failed to read file');
+            return res.json();
+        },
+        saveFile: async (path: string, content: string): Promise<{ ok: boolean; bytes: number }> => {
+            const res = await fetch(`${API_BASE}/api/workspace/save`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path, content })
+            });
+            await throwIfNotOk(res, 'Failed to save file');
+            return res.json();
+        },
+    },
     terminal: {
         runUrl: (prompt: string, modelId: string, opts?: { maxIterations?: number; temperature?: number }) => {
             return {

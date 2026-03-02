@@ -66,6 +66,10 @@ try:
     logger.info("Imported indexer router")
     from app.api.terminal import router as terminal_router
     logger.info("Imported terminal router")
+    from app.api.codebase import router as codebase_router
+    logger.info("Imported codebase router")
+    from app.api.workspace import router as workspace_router
+    logger.info("Imported workspace router")
 
 except Exception as e:
     logger.critical(f"Import error: {e}", exc_info=True)
@@ -149,7 +153,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="SiliconDev Backend",
     description="Local-first LLM fine-tuning engine",
-    version="0.5.6",
+    version="0.5.8",
     lifespan=lifespan,
 )
 
@@ -195,6 +199,8 @@ app.include_router(search_router, prefix="/api/search", tags=["search"])
 app.include_router(mcp_router, prefix="/api/mcp", tags=["mcp"])
 app.include_router(indexer_router, prefix="/api/indexer", tags=["indexer"])
 app.include_router(terminal_router, prefix="/api/terminal", tags=["terminal"])
+app.include_router(codebase_router, prefix="/api/codebase", tags=["codebase"])
+app.include_router(workspace_router, prefix="/api/workspace", tags=["workspace"])
 
 
 @app.get("/health")

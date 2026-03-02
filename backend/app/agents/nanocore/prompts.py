@@ -84,6 +84,14 @@ Stop a background process.
 </tool>
 ```
 
+### search_codebase
+Search the indexed codebase for relevant code. Returns matching code snippets with file paths and line numbers. Use this to find existing implementations, understand patterns, or locate where to make changes.
+```
+<tool name="search_codebase">
+<arg name="query">authentication middleware</arg>
+</tool>
+```
+
 ## Rules
 
 1. Think step-by-step before acting.

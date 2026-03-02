@@ -258,6 +258,7 @@ export function AgentTerminal() {
         case 'diff_proposal': {
           aiTextIdRef.current = null
           toolOutputIdRef.current = null
+          const filePath = d.file_path as string
           addFeedItem({
             id: crypto.randomUUID(),
             type: 'diff_proposal',
@@ -265,13 +266,15 @@ export function AgentTerminal() {
             timestamp: Date.now(),
             diffMeta: {
               callId: d.call_id as string,
-              filePath: d.file_path as string,
+              filePath,
               oldContent: d.old as string,
               newContent: d.new as string,
               diff: d.diff as string,
               status: 'pending',
             },
           })
+          // Signal the Code workspace to open this file
+          window.dispatchEvent(new CustomEvent('workspace-open-file', { detail: filePath }))
           break
         }
 

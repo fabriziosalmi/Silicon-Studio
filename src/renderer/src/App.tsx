@@ -20,7 +20,8 @@ import { useGlobalState } from './context/GlobalState'
 import { useConversations } from './context/ConversationContext'
 import { useNotes } from './context/NotesContext'
 import { apiClient } from './api/client'
-import { Database, Cpu, MessageSquare, BarChart2, TestTube, Brain, Zap, Rocket, FileText, ChevronsLeft, ChevronsRight, Plus, ChevronDown, ChevronRight, Settings as SettingsIcon, Package, TerminalSquare } from 'lucide-react'
+import { CodeWorkspace } from './components/CodeWorkspace/CodeWorkspace'
+import { Database, Cpu, MessageSquare, BarChart2, TestTube, Brain, Zap, Rocket, FileText, ChevronsLeft, ChevronsRight, Plus, ChevronDown, ChevronRight, Settings as SettingsIcon, Package, TerminalSquare, Code } from 'lucide-react'
 
 function App() {
   const [activeTab, setActiveTab] = useState('models')
@@ -56,6 +57,16 @@ function App() {
     if (pendingChatInput) setActiveTab('chat');
   }, [pendingChatInput]);
 
+  // Listen for tab switch events from child components
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const tab = (e as CustomEvent).detail
+      if (tab && typeof tab === 'string') setActiveTab(tab)
+    }
+    window.addEventListener('switch-tab', handler)
+    return () => window.removeEventListener('switch-tab', handler)
+  }, []);
+
   // Global keyboard shortcuts
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -80,6 +91,12 @@ function App() {
           if (!isInput) {
             e.preventDefault();
             toggleSidebar();
+          }
+          break;
+        case 'e': // Cmd+E — code workspace
+          if (!isInput) {
+            e.preventDefault();
+            setActiveTab('code');
           }
           break;
         case ',': // Cmd+, — settings (macOS convention)
@@ -236,6 +253,13 @@ function App() {
                   icon={<TerminalSquare size={18} />}
                   collapsed={sidebarCollapsed}
                 />
+                <SidebarItem
+                  label="Code"
+                  active={activeTab === 'code'}
+                  onClick={() => setActiveTab('code')}
+                  icon={<Code size={18} />}
+                  collapsed={sidebarCollapsed}
+                />
                 <div>
                     <SidebarItem
                       label="Notes"
@@ -371,8 +395,13 @@ function App() {
           <AgentTerminal />
         </div>
 
+        {/* Code workspace: full-bleed, no padding — stays mounted */}
+        <div className={`flex-1 overflow-hidden no-drag relative ${activeTab === 'code' ? '' : 'hidden'}`}>
+          <CodeWorkspace />
+        </div>
+
         {/* Standard tabs with scroll container */}
-        <div className={`flex-1 overflow-y-auto no-drag relative ${activeTab === 'terminal' ? 'hidden' : ''}`}>
+        <div className={`flex-1 overflow-y-auto no-drag relative ${activeTab === 'terminal' || activeTab === 'code' ? 'hidden' : ''}`}>
           <div className="w-full h-full p-4 md:p-8 overflow-x-hidden">
             {/* Keep-alive: tabs with expensive in-memory state stay mounted but hidden */}
             <div className={activeTab === 'chat' ? '' : 'hidden'}><ChatInterface /></div>

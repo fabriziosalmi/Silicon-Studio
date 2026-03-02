@@ -686,6 +686,31 @@ class SupervisorAgent:
                     yield _sse("tool_done", {"call_id": call_id, "exit_code": 0})
                     tool_results.append(f"[kill_process] {result}")
 
+                elif tc.name == "search_codebase":
+                    query = tc.args.get("query", "")
+                    yield _sse("tool_start", {"tool": "search_codebase", "args": {"query": query}, "call_id": call_id})
+
+                    try:
+                        from app.codebase.service import codebase_service
+                        results = codebase_service.search(query, top_k=8)
+                        if results:
+                            formatted = []
+                            for r in results:
+                                header = f"--- {r.file_path}:{r.start_line}-{r.end_line}"
+                                if r.symbol:
+                                    header += f" ({r.kind}: {r.symbol})"
+                                formatted.append(f"{header}\n{r.content}")
+                            output = "\n\n".join(formatted)
+                        else:
+                            output = "No results found. The codebase may not be indexed yet."
+                        yield _sse("tool_log", {"call_id": call_id, "stream": "stdout", "text": output})
+                        yield _sse("tool_done", {"call_id": call_id, "exit_code": 0})
+                        tool_results.append(f"[search_codebase]\n{_truncate(output)}")
+                    except Exception as e:
+                        yield _sse("tool_log", {"call_id": call_id, "stream": "stderr", "text": str(e)})
+                        yield _sse("tool_done", {"call_id": call_id, "exit_code": 1})
+                        tool_results.append(f"[search_codebase] Error: {e}")
+
                 else:
                     tool_results.append(f"[unknown tool: {tc.name}]")
 
