@@ -32,7 +32,13 @@
       "Bash(python -m pytest tests/test_nanocore_sse.py tests/test_mcp_mock.py tests/test_search_resilience.py tests/test_atomicity.py tests/test_sandbox_stress.py -v)",
       "Bash(backend/.venv/bin/python -m pytest backend/tests/ -v)",
       "Bash(backend/.venv/bin/python -m pytest backend/tests/ -v --ignore=backend/tests/test_shield.py)",
-      "Bash(backend/.venv/bin/python -m pytest backend/tests/test_conversations.py backend/tests/test_api.py backend/tests/test_agents.py backend/tests/test_deployment.py backend/tests/test_engine.py backend/tests/test_monitor.py backend/tests/test_parser.py backend/tests/test_preparation.py backend/tests/test_rag.py backend/tests/test_sandbox.py backend/tests/test_indexer.py backend/tests/test_nanocore_sse.py -v)"
+      "Bash(backend/.venv/bin/python -m pytest backend/tests/test_conversations.py backend/tests/test_api.py backend/tests/test_agents.py backend/tests/test_deployment.py backend/tests/test_engine.py backend/tests/test_monitor.py backend/tests/test_parser.py backend/tests/test_preparation.py backend/tests/test_rag.py backend/tests/test_sandbox.py backend/tests/test_indexer.py backend/tests/test_nanocore_sse.py -v)",
+      "Bash(unzip -t /Users/fab/Documents/git/Silicon-Studio/release/SiliconDev-0.4.2-arm64-mac.zip)",
+      "Bash(codesign --verify --deep --strict /Users/fab/Documents/git/Silicon-Studio/release/mac-arm64/SiliconDev.app)",
+      "Bash(hdiutil verify /Users/fab/Documents/git/Silicon-Studio/release/SiliconDev-0.4.2-arm64.dmg)",
+      "Bash(codesign -dvv /Users/fab/Documents/git/Silicon-Studio/release/mac-arm64/SiliconDev.app)",
+      "Bash(pkill -f \"silicon-sandbox\")",
+      "Bash(pkill -9 -f \"silicon-sandbox\")"
     ]
   }
 }
