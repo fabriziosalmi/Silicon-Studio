@@ -3,10 +3,22 @@ import { apiClient, cleanModelName } from '../api/client';
 import type { ModelEntry } from '../api/client';
 import { PageHeader } from './ui/PageHeader';
 import { useToast } from './ui/Toast';
-import { Search, Download, Trash2, Database, HardDrive, FileText, Play, LogOut } from 'lucide-react';
+import { Search, Download, Trash2, Database, HardDrive, FileText, Play, LogOut, AlertTriangle } from 'lucide-react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useGlobalState } from '../context/GlobalState';
+
+const RECOMMENDED_MODELS = [
+    { id: 'mlx-community/Qwen3-0.6B-4bit', label: 'Tiny, fast', sizeGB: 0.4 },
+    { id: 'mlx-community/Qwen2.5-3B-Instruct-4bit', label: 'Good default', sizeGB: 1.8 },
+    { id: 'mlx-community/Llama-3.2-3B-Instruct-4bit', label: 'Meta Llama', sizeGB: 1.8 },
+    { id: 'mlx-community/Gemma-3-4b-it-4bit', label: 'Google Gemma', sizeGB: 2.6 },
+];
+
+function parseSizeGB(size: string): number {
+    const match = size.match(/([\d.]+)\s*GB/i);
+    return match ? parseFloat(match[1]) : 0;
+}
 
 export function ModelsInterface() {
     const { toast } = useToast();
@@ -15,7 +27,7 @@ export function ModelsInterface() {
     const [loading, setLoading] = useState(false);
     const [downloading, setDownloading] = useState<Set<string>>(new Set());
     const [error, setError] = useState<string | null>(null);
-    const { setActiveModel, activeModel } = useGlobalState();
+    const { setActiveModel, activeModel, systemStats } = useGlobalState();
 
     // Split-view State
     const [selectedModel, setSelectedModel] = useState<ModelEntry | null>(null);
@@ -111,6 +123,9 @@ export function ModelsInterface() {
                 architecture: model.architecture,
                 context_window: result.context_window ?? parseContextWindow(model.context_window),
             });
+            if (result.warning) {
+                toast(result.warning, 'warning');
+            }
         } catch (e: unknown) {
             toast(`Failed to load model: ${e instanceof Error ? e.message : String(e)}`, 'error');
         }
@@ -120,12 +135,20 @@ export function ModelsInterface() {
         setReadmeLoading(true);
         try {
             if (id.startsWith('mlx-community/') || id.includes('/')) {
-                const response = await fetch(`https://huggingface.co/${id}/raw/main/README.md`);
-                if (response.ok) {
-                    const text = await response.text();
-                    setReadmeContent(text);
-                } else {
-                    setReadmeContent("README not found or model is private.");
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 5000);
+                try {
+                    const response = await fetch(`https://huggingface.co/${id}/raw/main/README.md`, { signal: controller.signal });
+                    clearTimeout(timeout);
+                    if (response.ok) {
+                        const text = await response.text();
+                        setReadmeContent(text);
+                    } else {
+                        setReadmeContent("README not found or model is private.");
+                    }
+                } catch (e) {
+                    clearTimeout(timeout);
+                    setReadmeContent("Unable to fetch README. You may be offline.");
                 }
             } else {
                 setReadmeContent("No README available for custom local models.");
@@ -299,8 +322,26 @@ export function ModelsInterface() {
                                 <tbody className="divide-y divide-white/5">
                                     {displayedMyModels.length === 0 ? (
                                         <tr>
-                                            <td colSpan={6} className="text-center py-12 text-gray-500">
-                                                No models found locally. Click "Discover" to download some!
+                                            <td colSpan={6} className="py-12 px-6">
+                                                {searchQuery ? (
+                                                    <div className="text-center text-gray-500">No models match your search.</div>
+                                                ) : (
+                                                    <div className="max-w-md mx-auto text-center">
+                                                        <Database className="w-10 h-10 text-gray-600 mx-auto mb-3" />
+                                                        <h3 className="text-lg font-semibold text-white mb-1">Download your first model</h3>
+                                                        <p className="text-sm text-gray-400 mb-4">
+                                                            {systemStats && systemStats.memory.total >= 16 * 1024 * 1024 * 1024
+                                                                ? 'Your Mac has 16 GB+ RAM. A 7B model like Qwen2.5-7B-Instruct-4bit is a good starting point.'
+                                                                : 'A 3B model like Qwen2.5-3B-Instruct-4bit runs well on 8 GB Macs.'}
+                                                        </p>
+                                                        <button
+                                                            onClick={() => setActiveTab('discover')}
+                                                            className="px-5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors"
+                                                        >
+                                                            Go to Discover
+                                                        </button>
+                                                    </div>
+                                                )}
                                             </td>
                                         </tr>
                                     ) : (
@@ -399,7 +440,42 @@ export function ModelsInterface() {
                                 </div>
                             </div>
                             <div className="flex-1 overflow-y-auto no-scrollbar">
-                                {displayedDiscoverModels.map(model => (
+                                {/* Recommended section — only when not searching */}
+                                {!searchQuery && (
+                                    <div className="p-4 border-b border-white/10">
+                                        <h3 className="text-xs font-bold uppercase tracking-wide text-gray-400 mb-3">Recommended for your Mac</h3>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {RECOMMENDED_MODELS.map(rec => {
+                                                const catalogModel = discoverableModels.find(m => m.id === rec.id);
+                                                if (!catalogModel) return null;
+                                                const isDownloading = downloading.has(rec.id);
+                                                return (
+                                                    <div key={rec.id} className="bg-white/[0.03] border border-white/10 rounded-lg p-3 flex flex-col gap-1.5">
+                                                        <div className="text-xs font-semibold text-white truncate">{cleanModelName(catalogModel.name)}</div>
+                                                        <div className="flex items-center gap-1.5">
+                                                            <span className="text-[10px] px-1.5 py-0.5 bg-blue-500/10 border border-blue-500/20 rounded text-blue-300">{rec.label}</span>
+                                                            <span className="text-[10px] text-gray-500">{catalogModel.size}</span>
+                                                        </div>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => handleDownload(rec.id)}
+                                                            disabled={isDownloading}
+                                                            className="mt-1 w-full text-center text-[10px] font-bold uppercase tracking-wide py-1.5 rounded bg-blue-600/20 hover:bg-blue-600/30 text-blue-400 border border-blue-500/20 transition-colors disabled:opacity-50"
+                                                        >
+                                                            {isDownloading ? 'Downloading...' : 'Download'}
+                                                        </button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                )}
+                                {displayedDiscoverModels.map(model => {
+                                    const sizeGB = parseSizeGB(model.size);
+                                    const exceedsRam = sizeGB > 0 && systemStats
+                                        ? sizeGB * 1.07e9 > systemStats.memory.available
+                                        : false;
+                                    return (
                                     <button
                                         key={model.id}
                                         onClick={() => selectModelForDetails(model)}
@@ -410,9 +486,16 @@ export function ModelsInterface() {
                                         <div className="flex items-center gap-2 mt-2">
                                             <span className="text-[10px] px-1.5 py-0.5 bg-white/5 rounded text-gray-400 border border-white/5">{guessPublisher(model.id)}</span>
                                             <span className="text-[10px] px-1.5 py-0.5 bg-white/5 rounded text-gray-400 border border-white/5">{model.size}</span>
+                                            {exceedsRam && (
+                                                <span className="text-[10px] px-1.5 py-0.5 bg-red-500/10 rounded text-red-400 border border-red-500/20 flex items-center gap-1">
+                                                    <AlertTriangle className="w-3 h-3" />
+                                                    Exceeds RAM
+                                                </span>
+                                            )}
                                         </div>
                                     </button>
-                                ))}
+                                    );
+                                })}
                             </div>
                         </div>
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 import uuid
 import json
 import logging
@@ -23,6 +23,7 @@ class FineTuneRequest(BaseModel):
     max_seq_length: int = Field(default=512, ge=64, le=32768)
     lora_dropout: float = Field(default=0.0, ge=0.0, le=1.0)
     lora_layers: int = Field(default=8, ge=1, le=128)
+    seed: Optional[int] = Field(default=None, ge=0)
     job_name: str = Field(default="", max_length=255)
 
 @router.post("/finetune")
@@ -131,6 +132,7 @@ class ChatRequest(BaseModel):
     max_tokens: int = Field(default=512, ge=1, le=32768)
     top_p: float = Field(default=0.9, ge=0.0, le=1.0)
     repetition_penalty: float = Field(default=1.1, ge=0.0, le=5.0)
+    seed: Optional[int] = Field(default=None, ge=0)
 
 @router.post("/chat")
 async def chat_generation(request: ChatRequest):

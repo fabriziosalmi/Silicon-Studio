@@ -82,6 +82,7 @@ export function ChatInterface() {
             topP: 0.9,
             repetitionPenalty: 1.1,
             reasoningMode: 'auto' as 'off' | 'auto' | 'low' | 'high',
+            seed: null as number | null,
             translateLanguage: '',
             showPrompt: false,
             syntaxCheck: true,
@@ -578,7 +579,8 @@ export function ChatInterface() {
                     temperature: settings.temperature,
                     max_tokens: settings.maxTokens,
                     top_p: settings.topP,
-                    repetition_penalty: settings.repetitionPenalty
+                    repetition_penalty: settings.repetitionPenalty,
+                    ...(settings.seed !== null ? { seed: settings.seed } : {})
                 })
             })
 
@@ -1545,6 +1547,7 @@ Return exactly this JSON structure (no other text):
                                 <div className="space-y-5">
                                     <ParameterSlider
                                         label="Temperature"
+                                        hint="Lower = more focused and deterministic. Higher = more creative and random."
                                         value={settings.temperature}
                                         min={0} max={2} step={0.05}
                                         format={(v) => v.toFixed(2)}
@@ -1552,6 +1555,7 @@ Return exactly this JSON structure (no other text):
                                     />
                                     <ParameterSlider
                                         label="Max Tokens"
+                                        hint="Maximum number of tokens the model will generate in its response."
                                         value={settings.maxTokens}
                                         min={64} max={activeModel?.context_window || 32768} step={64}
                                         format={(v) => v.toString()}
@@ -1559,6 +1563,7 @@ Return exactly this JSON structure (no other text):
                                     />
                                     <ParameterSlider
                                         label="Top-P"
+                                        hint="Nucleus sampling. Lower = only high-probability tokens. 1.0 = consider all tokens."
                                         value={settings.topP}
                                         min={0} max={1} step={0.05}
                                         format={(v) => v.toFixed(2)}
@@ -1566,11 +1571,27 @@ Return exactly this JSON structure (no other text):
                                     />
                                     <ParameterSlider
                                         label="Repetition Penalty"
+                                        hint="Penalizes repeated tokens. Higher = less repetition. 1.0 = no penalty."
                                         value={settings.repetitionPenalty}
                                         min={0.5} max={2} step={0.05}
                                         format={(v) => v.toFixed(2)}
                                         onChange={(v) => setSettings({ ...settings, repetitionPenalty: v })}
                                     />
+                                    <div>
+                                        <div className="flex justify-between items-center mb-1.5">
+                                            <label className="text-xs text-gray-500" title="Fixed random seed for reproducible outputs. Leave empty for random.">Seed</label>
+                                            <input
+                                                type="text"
+                                                placeholder="Random"
+                                                value={settings.seed !== null ? String(settings.seed) : ''}
+                                                onChange={(e) => {
+                                                    const v = e.target.value;
+                                                    setSettings({ ...settings, seed: v ? parseInt(v) || null : null });
+                                                }}
+                                                className="w-16 text-right text-xs font-mono text-gray-400 tabular-nums bg-transparent outline-none border-b border-transparent focus:border-white/20 transition-colors"
+                                            />
+                                        </div>
+                                    </div>
 
                                     <div className="border-t border-white/5 pt-5">
                                         <div className="px-0 mb-3 text-[10px] font-bold tracking-wide text-gray-500 uppercase">Reasoning</div>
@@ -2494,7 +2515,7 @@ function CodeBlock({
 }
 
 function ParameterSlider({
-    label, value, min, max, step, format, onChange
+    label, value, min, max, step, format, onChange, hint
 }: {
     label: string;
     value: number;
@@ -2503,6 +2524,7 @@ function ParameterSlider({
     step: number;
     format: (v: number) => string;
     onChange: (v: number) => void;
+    hint?: string;
 }) {
     const [editing, setEditing] = useState(false);
     const [editValue, setEditValue] = useState('');
@@ -2518,7 +2540,7 @@ function ParameterSlider({
     return (
         <div>
             <div className="flex justify-between items-center mb-1.5">
-                <label className="text-xs text-gray-500">{label}</label>
+                <label className="text-xs text-gray-500" title={hint}>{label}</label>
                 <input
                     type="text"
                     title={label}

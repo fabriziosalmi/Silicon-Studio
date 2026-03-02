@@ -70,7 +70,7 @@ except Exception as e:
 app = FastAPI(
     title="SiliconDev Backend",
     description="Local-first LLM fine-tuning engine",
-    version="0.4.2"
+    version="0.5.0"
 )
 
 # Configure CORS for local development securely

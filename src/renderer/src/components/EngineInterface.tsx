@@ -34,12 +34,18 @@ export function EngineInterface() {
     const [loraDropout, setLoraDropout] = useState(0.0)
     const [loraLayers, setLoraLayers] = useState(16)
 
+    const [seed, setSeed] = useState<number | null>(null)
     const [jobName, setJobName] = useState('')
 
     // Job State
     const [jobStatus, setJobStatus] = useState<JobStatus | null>(null)
     const [loading, setLoading] = useState(false)
-    const [chartData, setChartData] = useState<{ step: number; loss: number }[]>([])
+    const [chartData, setChartData] = useState<{ step: number; loss: number }[]>(() => {
+        try {
+            const saved = localStorage.getItem('silicon-studio-last-loss');
+            return saved ? JSON.parse(saved) : [];
+        } catch { return []; }
+    })
     const [exporting, setExporting] = useState(false)
     const [exportPath] = useState('~/Documents/Silicon-Studio/Exports')
     const [modelFormat, setModelFormat] = useState<ModelFormatInfo | null>(null)
@@ -92,6 +98,7 @@ export function EngineInterface() {
                 max_seq_length: maxSeqLength,
                 lora_dropout: loraDropout,
                 lora_layers: loraLayers,
+                ...(seed !== null ? { seed } : {}),
                 job_name: jobName
             })
             setJobStatus({ ...data, progress: 0, status: 'starting' })
@@ -129,6 +136,11 @@ export function EngineInterface() {
                     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
                     pollIntervalRef.current = null;
                     setIsTraining(false)
+                    // Persist loss curve so it survives tab switches
+                    setChartData(prev => {
+                        try { localStorage.setItem('silicon-studio-last-loss', JSON.stringify(prev)); } catch {}
+                        return prev;
+                    });
                 }
             } catch {
                 if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
@@ -312,6 +324,11 @@ export function EngineInterface() {
                                                 <input type="number" title="LoRA Dropout" step="0.05" value={loraDropout} onChange={e => { setLoraDropout(parseFloat(e.target.value)); setPreset('custom') }} className="w-full bg-black/40 border border-white/10 rounded p-1.5 text-xs font-mono outline-none" />
                                                 <p className="text-[9px] text-gray-600 leading-tight">0 = off, 0.05 typical</p>
                                             </div>
+                                            <div className="space-y-1">
+                                                <label className="text-[10px] text-gray-500 uppercase" title="Fixed random seed for reproducible training runs. Leave empty for random.">Seed</label>
+                                                <input type="number" title="Random Seed" placeholder="Random" value={seed ?? ''} onChange={e => setSeed(e.target.value ? parseInt(e.target.value) : null)} className="w-full bg-black/40 border border-white/10 rounded p-1.5 text-xs font-mono outline-none" />
+                                                <p className="text-[9px] text-gray-600 leading-tight">For reproducibility</p>
+                                            </div>
                                         </div>
                                     </div>
 
@@ -410,8 +427,26 @@ export function EngineInterface() {
                                     <Activity className="w-5 h-5 text-blue-400" />
                                     <h3 className="font-bold">Real-time Training Loss</h3>
                                 </div>
-                                <div className="text-xs flex gap-4 text-gray-500">
+                                <div className="text-xs flex gap-4 text-gray-500 items-center">
                                     <span className="flex items-center gap-1"><div className="w-2 h-2 rounded-full bg-blue-500" /> Validation Loss</span>
+                                    {chartData.length > 0 && (
+                                        <button
+                                            type="button"
+                                            onClick={() => {
+                                                const csv = 'step,loss\n' + chartData.map(d => `${d.step},${d.loss}`).join('\n');
+                                                const blob = new Blob([csv], { type: 'text/csv' });
+                                                const a = document.createElement('a');
+                                                a.href = URL.createObjectURL(blob);
+                                                a.download = `loss-${jobStatus?.job_name || 'training'}.csv`;
+                                                a.click();
+                                                URL.revokeObjectURL(a.href);
+                                            }}
+                                            className="flex items-center gap-1 px-2 py-1 rounded bg-white/5 border border-white/10 hover:bg-white/10 transition-colors text-gray-400"
+                                        >
+                                            <Download className="w-3 h-3" />
+                                            Export CSV
+                                        </button>
+                                    )}
                                 </div>
                             </div>
 

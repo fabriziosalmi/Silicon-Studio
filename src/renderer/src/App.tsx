@@ -56,6 +56,42 @@ function App() {
     if (pendingChatInput) setActiveTab('chat');
   }, [pendingChatInput]);
 
+  // Global keyboard shortcuts
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      // Only handle Cmd (Mac) shortcuts, ignore when typing in inputs
+      if (!e.metaKey) return;
+      const tag = (e.target as HTMLElement).tagName;
+      const isInput = tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement).isContentEditable;
+
+      switch (e.key) {
+        case 'k': // Cmd+K — quick switch: jump to chat
+          e.preventDefault();
+          setActiveTab('chat');
+          break;
+        case 'n': // Cmd+N — new conversation
+          if (!isInput) {
+            e.preventDefault();
+            conversations.setActiveConversationId(null);
+            setActiveTab('chat');
+          }
+          break;
+        case 'b': // Cmd+B — toggle sidebar
+          if (!isInput) {
+            e.preventDefault();
+            toggleSidebar();
+          }
+          break;
+        case ',': // Cmd+, — settings (macOS convention)
+          e.preventDefault();
+          setActiveTab('settings');
+          break;
+      }
+    };
+    document.addEventListener('keydown', handler);
+    return () => document.removeEventListener('keydown', handler);
+  }, [conversations, toggleSidebar]);
+
   // Poll backend health until ready
   useEffect(() => {
     let cancelled = false;

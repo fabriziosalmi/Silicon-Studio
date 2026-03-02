@@ -511,6 +511,10 @@ class MLXEngineService:
                 max_tokens = kwargs.get("max_tokens", 512)
                 top_p = kwargs.get("top_p", 0.9)
                 repetition_penalty = kwargs.get("repetition_penalty", 1.1)
+                seed = kwargs.get("seed")
+                if seed is not None:
+                    import mlx.core as mx
+                    mx.random.seed(int(seed))
 
                 loop = asyncio.get_running_loop()
                 
@@ -607,6 +611,10 @@ class MLXEngineService:
             max_seq_length = int(config.get("max_seq_length", 512))
             lora_dropout = float(config.get("lora_dropout", 0.0))
             lora_layers = int(config.get("lora_layers", 8))
+            seed = config.get("seed")
+            if seed is not None:
+                import mlx.core as mx
+                mx.random.seed(int(seed))
 
             # Safety clamp: limit max_seq_length based on available unified memory
             mem_gb = psutil.virtual_memory().total / (1024 ** 3)

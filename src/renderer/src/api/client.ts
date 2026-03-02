@@ -182,6 +182,7 @@ export interface FineTuneParams {
     max_seq_length?: number
     lora_dropout?: number
     lora_layers?: number
+    seed?: number
     job_name?: string
 }
 
@@ -379,7 +380,7 @@ export const apiClient = {
             await throwIfNotOk(res, 'Failed to export model');
             return res.json();
         },
-        loadModel: async (modelId: string): Promise<{ status: string; model_id: string; context_window?: number; architecture?: string }> => {
+        loadModel: async (modelId: string): Promise<{ status: string; model_id: string; context_window?: number; architecture?: string; warning?: string }> => {
             const res = await fetch(`${API_BASE}/api/engine/models/load`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

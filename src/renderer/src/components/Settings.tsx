@@ -653,7 +653,16 @@ export function Settings() {
                 <SectionHeader icon={<HardDrive size={16} />} title="Storage" />
                 {storageInfo ? (
                     <div className="space-y-3">
-                        <div className="text-xs text-gray-500 font-mono">{storageInfo.path}</div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-xs text-gray-500 font-mono">{storageInfo.path}</span>
+                            <button
+                                type="button"
+                                onClick={() => (window as any).electronAPI?.openPath?.(storageInfo.path)}
+                                className="text-[10px] px-2 py-0.5 rounded bg-white/5 border border-white/10 text-gray-400 hover:bg-white/10 transition-colors"
+                            >
+                                Open in Finder
+                            </button>
+                        </div>
                         <div className="grid grid-cols-3 gap-2">
                             {Object.entries(storageInfo.breakdown).map(([key, bytes]) => (
                                 <div key={key} className="flex items-center justify-between px-3 py-2 rounded-lg bg-black/30 border border-white/5">

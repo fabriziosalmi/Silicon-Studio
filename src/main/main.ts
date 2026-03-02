@@ -1,4 +1,4 @@
-import { app, BrowserWindow, screen, ipcMain, dialog } from 'electron';
+import { app, BrowserWindow, screen, ipcMain, dialog, shell } from 'electron';
 import * as path from 'path';
 import { spawn, ChildProcess } from 'child_process';
 import * as fs from 'fs';
@@ -201,6 +201,11 @@ app.whenReady().then(() => {
     // Log path IPC: renderer can show the log file location in Settings
     ipcMain.handle('get-log-path', () => {
         return log.transports.file.getFile().path;
+    });
+
+    // Open a filesystem path in Finder
+    ipcMain.handle('open-path', (_event, dirPath: string) => {
+        return shell.openPath(dirPath);
     });
 
     // Auto-updater: only in packaged builds
