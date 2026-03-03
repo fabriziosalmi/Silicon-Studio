@@ -18,6 +18,74 @@ from typing import Dict, Any, List
 
 logger = logging.getLogger(__name__)
 
+_vlm_compat_patched = False
+
+
+def _patch_transformers_vlm_compat():
+    """Patch transformers to handle models whose video processor isn't available.
+
+    transformers >= 5.x registers video processor mappings as None for some
+    model types (e.g. qwen3_5).  This causes two crashes:
+    1. ``video_processor_class_from_name`` does ``class_name in None``
+    2. Even after fixing (1), the actual processor class may require
+       PyTorch / Torchvision which aren't present in an MLX-only env.
+    3. ``ProcessorMixin.__init__`` rejects None for the video_processor arg.
+
+    The patches below are no-ops when everything works normally and only
+    activate when the above conditions are hit.
+    """
+    global _vlm_compat_patched
+    if _vlm_compat_patched:
+        return
+    _vlm_compat_patched = True
+
+    try:
+        import importlib
+        import transformers.models.auto.video_processing_auto as vpa
+        import transformers.processing_utils as pu
+
+        # (1) Guard against None in VIDEO_PROCESSOR_MAPPING_NAMES values
+        _orig_mapping = vpa.VIDEO_PROCESSOR_MAPPING_NAMES
+        def _safe_vpcfn(class_name):
+            for module_name, extractors in _orig_mapping.items():
+                if extractors is not None and class_name in extractors:
+                    mn = vpa.model_type_to_module_name(module_name)
+                    module = importlib.import_module(f".{mn}", "transformers.models")
+                    try:
+                        return getattr(module, class_name)
+                    except AttributeError:
+                        continue
+            for extractor in vpa.VIDEO_PROCESSOR_MAPPING._extra_content.values():
+                if getattr(extractor, "__name__", None) == class_name:
+                    return extractor
+            main_module = importlib.import_module("transformers")
+            if hasattr(main_module, class_name):
+                return getattr(main_module, class_name)
+            return None
+        vpa.video_processor_class_from_name = _safe_vpcfn
+
+        # (2) AutoVideoProcessor.from_pretrained -> None when backend missing
+        _orig_avp = vpa.AutoVideoProcessor.from_pretrained.__func__
+        @classmethod
+        def _safe_avp(cls, *args, **kwargs):
+            try:
+                return _orig_avp(cls, *args, **kwargs)
+            except ImportError:
+                return None
+        vpa.AutoVideoProcessor.from_pretrained = _safe_avp
+
+        # (3) Allow None video_processor through type check
+        _orig_check = pu.ProcessorMixin.check_argument_for_proper_class
+        def _safe_check(self, argument_name, arg):
+            if argument_name == "video_processor" and arg is None:
+                return
+            return _orig_check(self, argument_name, arg)
+        pu.ProcessorMixin.check_argument_for_proper_class = _safe_check
+
+        logger.debug("Applied transformers VLM compatibility patches")
+    except Exception as e:
+        logger.debug(f"Skipped transformers VLM compat patches: {e}")
+
 # Minimum free disk space required for heavy I/O operations (1 GB)
 _MIN_DISK_SPACE_BYTES = 1_073_741_824
 
@@ -181,6 +249,8 @@ class MLXEngineService:
             try:
                 with open(config_path, "r") as f:
                     config = json.load(f)
+                    if not isinstance(config, dict):
+                        raise ValueError("config.json is not a JSON object")
                     if "model_type" in config:
                         meta["architecture"] = config["model_type"].capitalize()
                     for key in ["max_position_embeddings", "model_max_length", "n_ctx", "max_sequence_length"]:
@@ -194,7 +264,7 @@ class MLXEngineService:
                     # Vision model detection
                     vision_keys = ["vision_config", "visual", "image_size",
                                    "vision_tower", "mm_projector_type", "visual_encoder"]
-                    meta["is_vision"] = any(k in config for k in vision_keys)
+                    meta["is_vision"] = any(k in config and config[k] is not None for k in vision_keys)
             except Exception as e:
                 logger.debug(f"Failed to parse config.json for {model_path}: {e}")
 
@@ -449,9 +519,10 @@ class MLXEngineService:
             try:
                 with open(config_file, "r") as f:
                     cfg = json.load(f)
-                vision_keys = ["vision_config", "visual", "image_size",
-                               "vision_tower", "mm_projector_type", "visual_encoder"]
-                is_vision = any(k in cfg for k in vision_keys)
+                if isinstance(cfg, dict):
+                    vision_keys = ["vision_config", "visual", "image_size",
+                                   "vision_tower", "mm_projector_type", "visual_encoder"]
+                    is_vision = any(k in cfg and cfg[k] is not None for k in vision_keys)
             except Exception:
                 pass
 
@@ -466,6 +537,7 @@ class MLXEngineService:
                         "Install it with: pip install 'silicon-studio-backend[vision]' "
                         "or: pip install mlx-vlm"
                     )
+                _patch_transformers_vlm_compat()
                 logger.info(f"Loading vision model via mlx-vlm: {model_id}")
                 model, processor = await loop.run_in_executor(None, vlm_load, path_to_load)
                 self.active_model = model
@@ -695,8 +767,8 @@ class MLXEngineService:
                     image_paths, text_messages = self._extract_vision_content(messages)
 
                     try:
-                        from mlx_vlm import generate as vlm_generate
-                        from mlx_vlm.prompt_utils import apply_chat_template as vlm_apply_chat_template
+                        from mlx_vlm import stream_generate as vlm_stream_generate
+                        from mlx_vlm.prompt_utils import get_message_json, get_chat_template
 
                         # Build the text prompt from the last user message
                         last_text = ""
@@ -705,22 +777,102 @@ class MLXEngineService:
                                 last_text = msg.get("content", "")
                                 break
 
-                        formatted_prompt = vlm_apply_chat_template(
-                            processor, model.config, last_text,
-                            num_images=len(image_paths)
-                        )
+                        model_type = getattr(model.config, "model_type", "")
+                        vlm_messages = [get_message_json(model_type, last_text, num_images=len(image_paths))]
+
+                        # Disable thinking for VLM — small models (0.8B-8B)
+                        # produce garbled output with enable_thinking=True.
+                        # Qwen3.5 recommended non-thinking VL params:
+                        # temperature=0.7, top_p=0.80, presence_penalty=1.5
+                        _vlm_enable_thinking = False
+                        try:
+                            formatted_prompt = get_chat_template(
+                                processor, vlm_messages, True,
+                                enable_thinking=_vlm_enable_thinking,
+                            )
+                        except TypeError:
+                            # Older mlx-vlm without enable_thinking param
+                            formatted_prompt = get_chat_template(
+                                processor, vlm_messages, True,
+                            )
+
+                        _thinking_active = _vlm_enable_thinking and formatted_prompt.rstrip().endswith("<think>")
+                        _think_budget = min(max(256, len(last_text.split()) * 8), 2048)
 
                         def _vlm_generate_iter():
-                            for chunk in vlm_generate(
+                            first = True
+                            token_count = 0
+                            accumulated = ""
+                            content_after_think = ""
+                            suppressing = False
+                            think_done = not _thinking_active
+
+                            # Qwen3.5 recommended VL non-thinking params.
+                            # presence_penalty not available in mlx-vlm,
+                            # use repetition_penalty as substitute.
+                            vlm_top_p = 0.8 if top_p == 0.9 else top_p  # default 0.8 for VL
+                            vlm_rep_penalty = repetition_penalty if repetition_penalty and repetition_penalty > 1.0 else 1.15
+
+                            for response in vlm_stream_generate(
                                 model, processor, formatted_prompt,
                                 image=image_paths if image_paths else None,
                                 max_tokens=max_tokens,
-                                temp=temp,
-                                verbose=False,
+                                temperature=temp,
+                                top_p=vlm_top_p,
+                                repetition_penalty=vlm_rep_penalty,
+                                repetition_context_size=64,
                             ):
                                 if self.stop_event.is_set():
                                     break
-                                yield chunk
+                                text = response.text
+                                token_count += 1
+                                accumulated += text
+
+                                if first and _thinking_active:
+                                    text = "<think>" + text
+                                    first = False
+
+                                # Model closed thinking naturally
+                                if not think_done and "</think>" in accumulated:
+                                    think_done = True
+                                    suppressing = False
+                                    yield text
+                                    continue
+
+                                # Budget exceeded — close thinking for frontend, suppress rest
+                                if not think_done and token_count > _think_budget and not suppressing:
+                                    yield "</think>\n"
+                                    suppressing = True
+                                    continue
+
+                                # Suppress excess thinking tokens until model
+                                # emits </think>.  If it takes too long, stop
+                                # waiting and yield whatever comes next as content.
+                                if suppressing:
+                                    if token_count > _think_budget * 3:
+                                        think_done = True
+                                        suppressing = False
+                                        # fall through to yield
+                                    else:
+                                        continue
+
+                                yield text
+
+                                # Track content after thinking for repetition detection
+                                if think_done:
+                                    content_after_think += text
+                                    # Check for repetition: if a 80+ char block repeats
+                                    clen = len(content_after_think)
+                                    if clen >= 200:
+                                        window = min(100, clen // 2)
+                                        if content_after_think[-window:] == content_after_think[-2 * window:-window]:
+                                            logger.warning("VLM repetition loop detected after %d content chars, stopping.", clen)
+                                            break
+
+                            # Model finished without closing thinking —
+                            # close it so the frontend gets a proper block.
+                            if not think_done:
+                                yield "</think>\n"
 
                         gen = _vlm_generate_iter()
                         try:
@@ -730,7 +882,11 @@ class MLXEngineService:
                                     break
                                 yield {"text": token_text, "done": False}
                         finally:
-                            gen.close()
+                            self.stop_event.set()
+                            try:
+                                gen.close()
+                            except ValueError:
+                                pass  # generator still running in executor thread
                             # Clean up temp image files
                             for p in image_paths:
                                 try:
@@ -849,7 +1005,11 @@ class MLXEngineService:
                                 break
                             yield {"text": token_text, "done": False}
                     finally:
-                        gen.close()
+                        self.stop_event.set()
+                        try:
+                            gen.close()
+                        except ValueError:
+                            pass  # generator still running in executor thread
 
                 yield {"text": "", "done": True}
 
@@ -904,14 +1064,17 @@ class MLXEngineService:
                 try:
                     with open(config_file, "r") as f:
                         cfg = json.load(f)
-                    vision_keys = ["vision_config", "visual", "image_size",
-                                   "vision_tower", "mm_projector_type", "visual_encoder"]
-                    if any(k in cfg for k in vision_keys):
-                        raise ValueError(
-                            "Fine-tuning vision models is not yet supported. "
-                            "LoRA training requires a text-only model."
-                        )
-                except json.JSONDecodeError:
+                    if isinstance(cfg, dict):
+                        vision_keys = ["vision_config", "visual", "image_size",
+                                       "vision_tower", "mm_projector_type", "visual_encoder"]
+                        if any(k in cfg and cfg[k] is not None for k in vision_keys):
+                            raise ValueError(
+                                "Fine-tuning vision models is not yet supported. "
+                                "LoRA training requires a text-only model."
+                            )
+                except (json.JSONDecodeError, ValueError) as e:
+                    if "Fine-tuning vision models" in str(e):
+                        raise
                     pass
 
             # Pre-check: reject datasets that would OOM when loaded into RAM

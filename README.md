@@ -2,6 +2,7 @@
 
 **Local LLM fine-tuning and chat for Apple Silicon.**
 
+![Version](https://img.shields.io/badge/version-0.6.0-blue)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 ![Platform: macOS](https://img.shields.io/badge/Platform-macOS_(Apple_Silicon)-black)
 ![Engine: MLX](https://img.shields.io/badge/Engine-MLX-blue)
@@ -52,7 +53,7 @@ npm run dev
 ## Features
 
 ### Chat
-Local ChatGPT-like interface, fully offline. Conversation branching, in-chat search (Ctrl+F), quick actions (rewrite, translate, self-critique), RAG knowledge injection, web search, syntax validation, PII redaction.
+Local ChatGPT-like interface, fully offline. Vision model support with image attachments. Conversation branching, in-chat search (Ctrl+F), quick actions (rewrite, translate, self-critique), RAG knowledge injection, web search, syntax validation, PII redaction.
 
 ### Fine-Tuning
 LoRA / QLoRA with visual configuration. Real-time loss curves, configurable hyperparameters, LoRA rank/alpha/dropout/layers.
@@ -85,7 +86,7 @@ Markdown editor with live preview, multi-note management, send to chat.
 
 - **Frontend**: Electron, React 19, TypeScript, Vite, TailwindCSS
 - **Backend**: Python, FastAPI, Uvicorn
-- **AI Engine**: Apple MLX, MLX-LM
+- **AI Engine**: Apple MLX, MLX-LM, MLX-VLM
 - **Data**: Pandas, Presidio, MCP SDK
 
 ## Contributing

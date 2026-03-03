@@ -1,5 +1,33 @@
 # Changelog
 
+## v0.6.0
+
+### Vision Model Support
+- VLM (Vision-Language Model) chat with image attachments
+- Image paste/upload in Chat with drag-and-drop support
+- Automatic VLM detection and model path routing (mlx-vlm)
+- Qwen3.5-recommended sampling parameters for VL tasks
+- Thinking mode disabled for VLM (direct response, no garbled output)
+- Repetition detection safety net for small VLM models
+
+### VLM Generation Fixes
+- Fixed temperature parameter being silently ignored (wrong kwarg name)
+- Fixed missing repetition_penalty and top_p in VLM generation path
+- Added `</think>` tag closure when model finishes without closing thinking
+- Content-level repetition loop detection (breaks on 100-char repeated blocks)
+
+### Frontend Thinking Block Rendering
+- Strict regex for `<think>` blocks — only matches when `</think>` is present
+- During streaming, thinking content shown without eating visible content
+- Prevents empty message body when model generates thinking but no response
+
+### E2E Test Suite
+- Expanded Playwright test suite from ~40 visibility checks to 74 interaction tests
+- Full coverage across all 13 app pages (Terminal, Code, Settings, Model Export, etc.)
+- Input interaction tests: typing, form submission, toggle clicks, dropdown changes
+- Console error monitoring during navigation
+- Mock routes for all backend API endpoints
+
 ## v0.5.8
 
 ### Vector Codebase Indexer

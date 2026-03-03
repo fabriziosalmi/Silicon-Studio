@@ -56,6 +56,7 @@ export function ChatInterface() {
     const userScrolledUpRef = useRef(false)
     const textareaRef = useRef<HTMLTextAreaElement>(null)
     const abortRef = useRef<AbortController | null>(null)
+    const sendingRef = useRef(false)
 
     // Abort any in-flight streaming fetch on unmount
     useEffect(() => {
@@ -489,6 +490,7 @@ export function ChatInterface() {
             // stop failed silently
         }
         setIsGenerating(false);
+        sendingRef.current = false;
     }
 
     // ── Vision image helpers ──
@@ -546,127 +548,131 @@ export function ChatInterface() {
 
     const handleSend = async (directPrompt?: string, displayContent?: string, actionType?: string) => {
         const text = directPrompt ?? input;
-        if ((!text.trim() && pendingImages.length === 0) || !currentModelId || isGenerating) return
+        if ((!text.trim() && pendingImages.length === 0) || !currentModelId || isGenerating || sendingRef.current) return
+        sendingRef.current = true
 
-        // Build multipart content if images are attached to a vision model
-        let fullContent: string | ContentPart[] = text
-        const imagePreviewUrls: string[] = []
-        if (pendingImages.length > 0 && activeModel?.is_vision) {
-            const parts: ContentPart[] = []
-            if (text.trim()) {
-                parts.push({ type: 'text', text: text.trim() })
-            }
-            for (const img of pendingImages) {
-                const dataUrl = await fileToBase64(img.file)
-                parts.push({ type: 'image_url', image_url: { url: dataUrl } })
-                imagePreviewUrls.push(img.preview)
-            }
-            fullContent = parts
-            setPendingImages([])  // clear without revoking — previews still needed for display
-        }
-
-        const userMsg: Message = {
-            role: 'user',
-            content: text || '(image)',
-            ...(displayContent && { displayContent }),
-            ...(actionType && { actionType }),
-            ...(imagePreviewUrls.length > 0 && { images: imagePreviewUrls }),
-            ...(Array.isArray(fullContent) && { fullContent }),
-        }
-
-        // Build system prompt with optional reasoning instructions
-        let systemContent = settings.systemPrompt?.trim() || '';
-        const reasoningInstructions: Record<string, string> = {
-            off: '',
-            auto: '',
-            low: '\n\nBefore answering, briefly outline your reasoning in 2-3 sentences, then provide your response. Keep the reasoning concise.',
-            high: '\n\nBefore answering, think through the problem step by step. Consider multiple angles, edge cases, and potential issues. Show your full reasoning process, then provide a thorough response.',
-        };
-        const cotSuffix = reasoningInstructions[settings.reasoningMode] || '';
-        if (cotSuffix) systemContent += cotSuffix;
-
-        // Inject semantic memory context if available
-        if (settings.memoryMapEnabled && memoryMap && memoryMap.topics.length > 0) {
-            const memParts: string[] = [];
-            if (memoryMap.topics.length > 0) {
-                memParts.push('Topics: ' + memoryMap.topics.map(t => `${t.name} (${t.summary})`).join('; '));
-            }
-            if (memoryMap.decisions.length > 0) {
-                memParts.push('Decisions: ' + memoryMap.decisions.map(d => `${d.what} — ${d.why}`).join('; '));
-            }
-            if (memoryMap.keyFacts.length > 0) {
-                memParts.push('Key facts: ' + memoryMap.keyFacts.join('; '));
-            }
-            if (memoryMap.codeContext.length > 0) {
-                memParts.push('Code context: ' + memoryMap.codeContext.map(c => `${c.language}: ${c.description}`).join('; '));
-            }
-            systemContent += '\n\n[CONVERSATION CONTEXT]\n' + memParts.join('\n');
-        }
-
-        // Inject RAG/web search only for direct user messages (skip for action prompts)
-        const isDirectMessage = !actionType;
-        let sourceIndex = 1;
-        const collectedSources: SourceRef[] = [];
-
-        if (isDirectMessage && settings.ragEnabled && settings.ragCollectionId) {
-            try {
-                const ragResults = await apiClient.rag.query(settings.ragCollectionId, text, 5);
-                if (ragResults.results.length > 0) {
-                    systemContent += '\n\n[KNOWLEDGE BASE]\n' + ragResults.results.map(r => {
-                        const idx = sourceIndex++;
-                        collectedSources.push({ index: idx, title: r.text.slice(0, 80) + (r.text.length > 80 ? '...' : ''), method: r.method || 'rag' });
-                        return `[${idx}] ${r.text}`;
-                    }).join('\n---\n');
-                }
-            } catch {
-                // RAG query failed silently
-            }
-        }
-
-        if (isDirectMessage && settings.webSearchEnabled) {
-            try {
-                const searchResults = await apiClient.search.web(text, 3, true);
-                if (searchResults.length > 0) {
-                    systemContent += '\n\n[WEB SEARCH]\n' + searchResults.map(r => {
-                        const idx = sourceIndex++;
-                        collectedSources.push({ index: idx, title: r.title, url: r.url, method: 'web' });
-                        const body = r.content || r.snippet;
-                        return `[${idx}] ${r.title}\n${body}\nSource: ${r.url}`;
-                    }).join('\n---\n');
-                }
-            } catch {
-                systemContent += '\n\n[Web search unavailable — responding without web results]';
-            }
-        }
-
-        // Add grounding instructions when context sources are present
-        if (collectedSources.length > 0) {
-            systemContent += '\n\nIMPORTANT: Base your answer on the provided sources above. Add inline citations like [1], [2] etc. referring to the numbered sources. If the sources don\'t contain enough information, say so.';
-        }
-
-        const systemMsg: Message | null = systemContent
-            ? { role: 'system', content: systemContent }
-            : null
-        const conversation = [
-            ...(systemMsg ? [systemMsg] : []),
-            ...messages,
-            userMsg
-        ]
-        setMessages(prev => [...prev, userMsg])
-        if (!directPrompt) setInput('')
-        setIsGenerating(true)
-
-        const assistantMsgId = crypto.randomUUID()
-        const initialAssistantMsg: Message = {
-            role: 'assistant',
-            content: '',
-            id: assistantMsgId,
-            sources: collectedSources.length > 0 ? collectedSources : undefined,
-            stats: { tokensPerSecond: 0, timeToFirstToken: 0, totalTokens: 0 }
-        }
-        setMessages(prev => [...prev, initialAssistantMsg])
-
+        let assistantMsgId = ''
         try {
+            // Build multipart content if images are attached to a vision model
+            let fullContent: string | ContentPart[] = text
+            const imagePreviewUrls: string[] = []
+            if (pendingImages.length > 0 && activeModel?.is_vision) {
+                const parts: ContentPart[] = []
+                if (text.trim()) {
+                    parts.push({ type: 'text', text: text.trim() })
+                }
+                for (const img of pendingImages) {
+                    const dataUrl = await fileToBase64(img.file)
+                    parts.push({ type: 'image_url', image_url: { url: dataUrl } })
+                    imagePreviewUrls.push(img.preview)
+                }
+                fullContent = parts
+                setPendingImages([])  // clear without revoking — previews still needed for display
+            }
+
+            const userMsg: Message = {
+                role: 'user',
+                content: text || '(image)',
+                ...(displayContent && { displayContent }),
+                ...(actionType && { actionType }),
+                ...(imagePreviewUrls.length > 0 && { images: imagePreviewUrls }),
+                ...(Array.isArray(fullContent) && { fullContent }),
+            }
+
+            // Show user message and clear input IMMEDIATELY (before async RAG/web search)
+            setMessages(prev => [...prev, userMsg])
+            if (!directPrompt) setInput('')
+            setIsGenerating(true)
+
+            // Build system prompt with optional reasoning instructions
+            let systemContent = settings.systemPrompt?.trim() || '';
+            const reasoningInstructions: Record<string, string> = {
+                off: '',
+                auto: '',
+                low: '\n\nBefore answering, briefly outline your reasoning in 2-3 sentences, then provide your response. Keep the reasoning concise.',
+                high: '\n\nBefore answering, think through the problem step by step. Consider multiple angles, edge cases, and potential issues. Show your full reasoning process, then provide a thorough response.',
+            };
+            const cotSuffix = reasoningInstructions[settings.reasoningMode] || '';
+            if (cotSuffix) systemContent += cotSuffix;
+
+            // Inject semantic memory context if available
+            if (settings.memoryMapEnabled && memoryMap && memoryMap.topics.length > 0) {
+                const memParts: string[] = [];
+                if (memoryMap.topics.length > 0) {
+                    memParts.push('Topics: ' + memoryMap.topics.map(t => `${t.name} (${t.summary})`).join('; '));
+                }
+                if (memoryMap.decisions.length > 0) {
+                    memParts.push('Decisions: ' + memoryMap.decisions.map(d => `${d.what} — ${d.why}`).join('; '));
+                }
+                if (memoryMap.keyFacts.length > 0) {
+                    memParts.push('Key facts: ' + memoryMap.keyFacts.join('; '));
+                }
+                if (memoryMap.codeContext.length > 0) {
+                    memParts.push('Code context: ' + memoryMap.codeContext.map(c => `${c.language}: ${c.description}`).join('; '));
+                }
+                systemContent += '\n\n[CONVERSATION CONTEXT]\n' + memParts.join('\n');
+            }
+
+            // Inject RAG/web search only for direct user messages (skip for action prompts)
+            const isDirectMessage = !actionType;
+            let sourceIndex = 1;
+            const collectedSources: SourceRef[] = [];
+
+            if (isDirectMessage && settings.ragEnabled && settings.ragCollectionId) {
+                try {
+                    const ragResults = await apiClient.rag.query(settings.ragCollectionId, text, 5);
+                    if (ragResults.results.length > 0) {
+                        systemContent += '\n\n[KNOWLEDGE BASE]\n' + ragResults.results.map(r => {
+                            const idx = sourceIndex++;
+                            collectedSources.push({ index: idx, title: r.text.slice(0, 80) + (r.text.length > 80 ? '...' : ''), method: r.method || 'rag' });
+                            return `[${idx}] ${r.text}`;
+                        }).join('\n---\n');
+                    }
+                } catch {
+                    // RAG query failed silently
+                }
+            }
+
+            if (isDirectMessage && settings.webSearchEnabled) {
+                try {
+                    const searchResults = await apiClient.search.web(text, 3, true);
+                    if (searchResults.length > 0) {
+                        systemContent += '\n\n[WEB SEARCH]\n' + searchResults.map(r => {
+                            const idx = sourceIndex++;
+                            collectedSources.push({ index: idx, title: r.title, url: r.url, method: 'web' });
+                            const body = r.content || r.snippet;
+                            return `[${idx}] ${r.title}\n${body}\nSource: ${r.url}`;
+                        }).join('\n---\n');
+                    }
+                } catch {
+                    systemContent += '\n\n[Web search unavailable — responding without web results]';
+                }
+            }
+
+            // Add grounding instructions when context sources are present
+            if (collectedSources.length > 0) {
+                systemContent += '\n\nIMPORTANT: Base your answer on the provided sources above. Add inline citations like [1], [2] etc. referring to the numbered sources. If the sources don\'t contain enough information, say so.';
+            }
+
+            const systemMsg: Message | null = systemContent
+                ? { role: 'system', content: systemContent }
+                : null
+            const conversation = [
+                ...(systemMsg ? [systemMsg] : []),
+                ...messages,
+                userMsg
+            ]
+
+            assistantMsgId = crypto.randomUUID()
+            const initialAssistantMsg: Message = {
+                role: 'assistant',
+                content: '',
+                id: assistantMsgId,
+                sources: collectedSources.length > 0 ? collectedSources : undefined,
+                stats: { tokensPerSecond: 0, timeToFirstToken: 0, totalTokens: 0 }
+            }
+            setMessages(prev => [...prev, initialAssistantMsg])
+
             const startTime = Date.now()
             let firstTokenTime = 0
             let tokenCount = 0
@@ -749,11 +755,14 @@ export function ChatInterface() {
             }
         } catch (err: unknown) {
             if (err instanceof DOMException && err.name === 'AbortError') return;
-            setMessages(prev => prev.map(m =>
-                m.id === assistantMsgId ? { ...m, content: `Error: ${err instanceof Error ? err.message : String(err)}` } : m
-            ))
+            if (assistantMsgId) {
+                setMessages(prev => prev.map(m =>
+                    m.id === assistantMsgId ? { ...m, content: `Error: ${err instanceof Error ? err.message : String(err)}` } : m
+                ))
+            }
         } finally {
             setIsGenerating(false)
+            sendingRef.current = false
         }
     }
 
@@ -1444,10 +1453,15 @@ Return exactly this JSON structure (no other text):
                                     let visibleContent = msg.content;
 
                                     if (msg.role === 'assistant') {
-                                        const thinkMatch = msg.content.match(/<think>([\s\S]*?)(<\/think>|$)/);
-                                        if (thinkMatch) {
-                                            thinkingContent = thinkMatch[1].trim();
-                                            visibleContent = msg.content.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim();
+                                        const closedMatch = msg.content.match(/<think>([\s\S]*?)<\/think>/);
+                                        if (closedMatch) {
+                                            // Thinking block is closed — separate thinking from content
+                                            thinkingContent = closedMatch[1].trim();
+                                            visibleContent = msg.content.replace(/<think>[\s\S]*?<\/think>/, '').trim();
+                                        } else if (msg.content.startsWith('<think>')) {
+                                            // Still streaming thinking (no </think> yet)
+                                            thinkingContent = msg.content.slice(7).trim();
+                                            visibleContent = '';
                                         }
                                     }
 

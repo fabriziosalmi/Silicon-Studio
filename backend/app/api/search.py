@@ -78,7 +78,7 @@ async def web_search(req: SearchRequest):
 
     def _run_ddg(query: str, max_results: int):
         with DDGS() as ddgs:
-            return list(ddgs.text(query, max_results=max_results))
+            return list(ddgs.text(query, region="wt-wt", max_results=max_results))
 
     try:
         loop = asyncio.get_running_loop()
@@ -146,7 +146,7 @@ async def deep_search(req: DeepSearchRequest):
     def _run_deep(sub_queries_list, max_pages):
         with DDGS() as ddgs:
             for sq in sub_queries_list:
-                for r in ddgs.text(sq, max_results=max_pages):
+                for r in ddgs.text(sq, region="wt-wt", max_results=max_pages):
                     if r["href"] not in seen_urls:
                         seen_urls.add(r["href"])
                         all_raw.append(r)
