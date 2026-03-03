@@ -43,6 +43,8 @@ class MLXEngineService:
         self.active_model_id = None
         self.active_model = None
         self.active_tokenizer = None
+        self.active_processor = None       # mlx-vlm processor (vision models)
+        self.active_is_vision = False
         self.loaded_models = {}
         self.stop_event = threading.Event()
         self.generation_lock = asyncio.Lock()
@@ -169,7 +171,8 @@ class MLXEngineService:
         meta = {
             "architecture": "Unknown",
             "context_window": "Unknown",
-            "quantization": "Standard"
+            "quantization": "Standard",
+            "is_vision": False,
         }
         
         # 1. Transformers config.json
@@ -188,6 +191,10 @@ class MLXEngineService:
                     if "quantization" in config:
                         q = config["quantization"]
                         meta["quantization"] = f"{q['bits']}-bit" if isinstance(q, dict) and "bits" in q else str(q)
+                    # Vision model detection
+                    vision_keys = ["vision_config", "visual", "image_size",
+                                   "vision_tower", "mm_projector_type", "visual_encoder"]
+                    meta["is_vision"] = any(k in config for k in vision_keys)
             except Exception as e:
                 logger.debug(f"Failed to parse config.json for {model_path}: {e}")
 
@@ -356,7 +363,7 @@ class MLXEngineService:
 
     async def _load_model_impl(self, model_id: str):
         """Internal model loading without lock (caller must hold the lock)."""
-        if self.active_model_id == model_id and self.active_model and self.active_tokenizer:
+        if self.active_model_id == model_id and self.active_model and (self.active_tokenizer or self.active_processor):
             logger.info(f"Model {model_id} is already active.")
             return
 
@@ -365,6 +372,8 @@ class MLXEngineService:
             logger.info(f"Unloading previous model {self.active_model_id}...")
             self.active_model = None
             self.active_tokenizer = None
+            self.active_processor = None
+            self.active_is_vision = False
             self.active_model_id = None
             gc.collect()
             mx.metal.clear_cache()
@@ -433,14 +442,45 @@ class MLXEngineService:
                     )
                     logger.warning(self._load_warning)
 
+        # Detect vision model from config.json
+        is_vision = False
+        config_file = Path(path_to_load) / "config.json"
+        if config_file.exists():
+            try:
+                with open(config_file, "r") as f:
+                    cfg = json.load(f)
+                vision_keys = ["vision_config", "visual", "image_size",
+                               "vision_tower", "mm_projector_type", "visual_encoder"]
+                is_vision = any(k in cfg for k in vision_keys)
+            except Exception:
+                pass
+
         loop = asyncio.get_running_loop()
         try:
-            model, tokenizer = await loop.run_in_executor(None, load, path_to_load)
+            if is_vision:
+                try:
+                    from mlx_vlm import load as vlm_load
+                except ImportError:
+                    raise ImportError(
+                        "mlx-vlm is required for vision models but not installed. "
+                        "Install it with: pip install 'silicon-studio-backend[vision]' "
+                        "or: pip install mlx-vlm"
+                    )
+                logger.info(f"Loading vision model via mlx-vlm: {model_id}")
+                model, processor = await loop.run_in_executor(None, vlm_load, path_to_load)
+                self.active_model = model
+                self.active_tokenizer = None
+                self.active_processor = processor
+                self.active_is_vision = True
+            else:
+                model, tokenizer = await loop.run_in_executor(None, load, path_to_load)
+                self.active_model = model
+                self.active_tokenizer = tokenizer
+                self.active_processor = None
+                self.active_is_vision = False
 
             self.active_model_id = model_id
-            self.active_model = model
-            self.active_tokenizer = tokenizer
-            logger.info(f"Model {model_id} loaded and set as active.")
+            logger.info(f"Model {model_id} loaded and set as active (vision={is_vision}).")
 
             # Post-load memory pressure check
             mem = psutil.virtual_memory()
@@ -455,6 +495,8 @@ class MLXEngineService:
             self.active_model_id = None
             self.active_model = None
             self.active_tokenizer = None
+            self.active_processor = None
+            self.active_is_vision = False
             logger.error(f"Failed to load model {model_id}: {e}")
             raise
 
@@ -481,6 +523,7 @@ class MLXEngineService:
                     "context_window": cw_num,
                     "architecture": m.get("architecture"),
                     "quantization": m.get("quantization"),
+                    "is_vision": m.get("is_vision", False),
                 }
                 if self._load_warning:
                     result["warning"] = self._load_warning
@@ -495,6 +538,8 @@ class MLXEngineService:
                 logger.info(f"Unloading model {self.active_model_id}...")
                 self.active_model = None
                 self.active_tokenizer = None
+                self.active_processor = None
+                self.active_is_vision = False
                 self.active_model_id = None
                 gc.collect()
                 mx.metal.clear_cache()
@@ -506,6 +551,91 @@ class MLXEngineService:
         """Sets the stop event to interrupt MLX generation."""
         self.stop_event.set()
         logger.info("Stop signal sent to generation loop.")
+
+    def _extract_vision_content(self, messages: list) -> tuple:
+        """
+        Parse messages with OpenAI-style content parts.
+        Returns (image_file_paths, text_messages).
+
+        Handles both:
+        - content: str  (text only, legacy)
+        - content: list[{type: "text", text: "..."}, {type: "image_url", image_url: {url: "data:..."}}]
+        """
+        image_paths = []
+        text_messages = []
+
+        for msg in messages:
+            content = msg.get("content", "")
+            role = msg.get("role", "user")
+
+            if isinstance(content, str):
+                text_messages.append({"role": role, "content": content})
+            elif isinstance(content, list):
+                msg_text = ""
+                for part in content:
+                    if isinstance(part, dict):
+                        if part.get("type") == "text":
+                            msg_text += part.get("text", "")
+                        elif part.get("type") == "image_url":
+                            url = ""
+                            image_url = part.get("image_url")
+                            if isinstance(image_url, dict):
+                                url = image_url.get("url", "")
+                            elif isinstance(image_url, str):
+                                url = image_url
+                            if url.startswith("data:"):
+                                path = self._save_base64_image(url)
+                                if path:
+                                    image_paths.append(path)
+                text_messages.append({"role": role, "content": msg_text})
+            else:
+                text_messages.append({"role": role, "content": str(content)})
+
+        return image_paths, text_messages
+
+    @staticmethod
+    def _save_base64_image(data_url: str) -> str | None:
+        """Decode a data: URL to a temp file, return the file path."""
+        import base64
+        import tempfile
+        try:
+            header, b64data = data_url.split(",", 1)
+            # Extract extension from mime type: "data:image/png;base64" → "png"
+            mime = header.split(":")[1].split(";")[0] if ":" in header else "image/png"
+            ext = mime.split("/")[1] if "/" in mime else "png"
+            if ext not in ("png", "jpg", "jpeg", "gif", "webp", "bmp"):
+                ext = "png"
+
+            img_bytes = base64.b64decode(b64data)
+            fd, path = tempfile.mkstemp(suffix=f".{ext}", prefix="silicon_vlm_")
+            with os.fdopen(fd, "wb") as f:
+                f.write(img_bytes)
+            return path
+        except Exception as e:
+            logger.error(f"Failed to decode base64 image: {e}")
+            return None
+
+    @staticmethod
+    def _flatten_messages_to_text(messages: list) -> list:
+        """
+        Ensure all message content is plain strings.
+        Extracts text from multipart content, ignores images.
+        """
+        flat = []
+        for msg in messages:
+            content = msg.get("content", "")
+            role = msg.get("role", "user")
+            if isinstance(content, str):
+                flat.append({"role": role, "content": content})
+            elif isinstance(content, list):
+                text_parts = []
+                for part in content:
+                    if isinstance(part, dict) and part.get("type") == "text":
+                        text_parts.append(part.get("text", ""))
+                flat.append({"role": role, "content": " ".join(text_parts)})
+            else:
+                flat.append({"role": role, "content": str(content)})
+        return flat
 
     async def generate_stream(self, model_id: str, messages: list, **kwargs):
         """
@@ -519,7 +649,10 @@ class MLXEngineService:
                 
                 model = self.active_model
                 tokenizer = self.active_tokenizer
-                if not model or not tokenizer:
+                processor = self.active_processor
+                is_vision = self.active_is_vision
+
+                if not model or not (tokenizer or processor):
                     yield {"error": "Model not loaded"}
                     return
 
@@ -531,73 +664,8 @@ class MLXEngineService:
                         "done": False,
                     }
 
-                # 2. Prepare Prompt — with context overflow protection
-                # Detect model's max context from config
-                max_ctx = None
-                for m in self.models_config:
-                    if m["id"] == model_id:
-                        cw = m.get("context_window", "")
-                        if cw and cw != "Unknown":
-                            import re as _re
-                            match = _re.match(r"^(\d+)k$", str(cw), _re.IGNORECASE)
-                            if match:
-                                max_ctx = int(match.group(1)) * 1024
-                            else:
-                                try:
-                                    max_ctx = int(cw)
-                                except ValueError:
-                                    pass
-                        break
-
-                if hasattr(tokenizer, "apply_chat_template"):
-                    try:
-                        prompt = tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-                    except Exception:
-                        # Fallback: raw ChatML format
-                        parts = []
-                        for msg in messages:
-                            role = msg.get("role", msg.get("role", "user"))
-                            content = msg.get("content", msg.get("content", ""))
-                            parts.append(f"<|im_start|>{role}\n{content}<|im_end|>")
-                        parts.append("<|im_start|>assistant\n")
-                        prompt = "\n".join(parts)
-                else:
-                    prompt = messages[-1]['content']
-
-                # Truncate if prompt exceeds model context (FIFO: drop oldest messages)
-                if max_ctx and max_ctx > 0:
-                    reserve_tokens = max_tokens  # leave room for generation
-                    prompt_limit = max_ctx - reserve_tokens
-                    if prompt_limit < 128:
-                        prompt_limit = 128
-                    token_count = len(tokenizer.encode(prompt))
-                    if token_count > prompt_limit:
-                        logger.warning(
-                            f"Prompt ({token_count} tokens) exceeds context limit "
-                            f"({max_ctx}) minus reserve ({reserve_tokens}). Truncating."
-                        )
-                        # Re-build with fewer messages (drop oldest user/assistant turns)
-                        trimmed = list(messages)
-                        while len(trimmed) > 1:
-                            trimmed.pop(0)  # drop oldest
-                            if hasattr(tokenizer, "apply_chat_template"):
-                                try:
-                                    prompt = tokenizer.apply_chat_template(
-                                        trimmed, tokenize=False, add_generation_prompt=True
-                                    )
-                                except Exception:
-                                    prompt = trimmed[-1].get("content", trimmed[-1].get("content", ""))
-                            else:
-                                prompt = trimmed[-1].get("content", trimmed[-1].get("content", ""))
-                            if len(tokenizer.encode(prompt)) <= prompt_limit:
-                                break
-
-                # 3. Reset Stop Event
-                self.stop_event.clear()
-
-                # 4. Stream Generation
+                # Common generation parameters
                 temp = kwargs.get("temperature", 0.7)
-                # Clamp: temp=0 can cause division by zero in softmax on some MLX versions
                 if temp < 0.01:
                     temp = 0.01
                 max_tokens = kwargs.get("max_tokens", 512)
@@ -608,48 +676,180 @@ class MLXEngineService:
                     import mlx.core as mx
                     mx.random.seed(int(seed))
 
+                # Reset Stop Event
+                self.stop_event.clear()
+
                 loop = asyncio.get_running_loop()
-                
-                # MLX generate is a generator, we run it in a thread and yield tokens
-                def _generate_iter():
-                    from mlx_lm import stream_generate
-                    from mlx_lm.sample_utils import make_sampler, make_logits_processors
 
-                    sampler = make_sampler(temp=temp, top_p=top_p)
-                    logits_processors = make_logits_processors(repetition_penalty=repetition_penalty)
-
-                    for response in stream_generate(
-                        model, 
-                        tokenizer, 
-                        prompt=prompt, 
-                        max_tokens=max_tokens, 
-                        sampler=sampler,
-                        logits_processors=logits_processors
-                    ):
-                        if self.stop_event.is_set():
-                            break
-                        # response is a GenerationResponse dataclass with .text, .generation_tps, etc.
-                        yield response.text
-
-                # Iterate over the blocking generator in an executor
-                # We use a sentinel to avoid StopIteration issues with asyncio futures
+                # Sentinel for async iteration
                 _SENTINEL = object()
-                
+
                 def _next_token(gen):
                     try:
                         return next(gen)
                     except StopIteration:
                         return _SENTINEL
-                
-                gen = _generate_iter()
-                try:
-                    while True:
-                        token_text = await loop.run_in_executor(None, _next_token, gen)
-                        if token_text is _SENTINEL:
+
+                if is_vision:
+                    # ── Vision model path (mlx-vlm) ──
+                    image_paths, text_messages = self._extract_vision_content(messages)
+
+                    try:
+                        from mlx_vlm import generate as vlm_generate
+                        from mlx_vlm.prompt_utils import apply_chat_template as vlm_apply_chat_template
+
+                        # Build the text prompt from the last user message
+                        last_text = ""
+                        for msg in reversed(text_messages):
+                            if msg.get("role") == "user":
+                                last_text = msg.get("content", "")
+                                break
+
+                        formatted_prompt = vlm_apply_chat_template(
+                            processor, model.config, last_text,
+                            num_images=len(image_paths)
+                        )
+
+                        def _vlm_generate_iter():
+                            for chunk in vlm_generate(
+                                model, processor, formatted_prompt,
+                                image=image_paths if image_paths else None,
+                                max_tokens=max_tokens,
+                                temp=temp,
+                                verbose=False,
+                            ):
+                                if self.stop_event.is_set():
+                                    break
+                                yield chunk
+
+                        gen = _vlm_generate_iter()
+                        try:
+                            while True:
+                                token_text = await loop.run_in_executor(None, _next_token, gen)
+                                if token_text is _SENTINEL:
+                                    break
+                                yield {"text": token_text, "done": False}
+                        finally:
+                            gen.close()
+                            # Clean up temp image files
+                            for p in image_paths:
+                                try:
+                                    os.unlink(p)
+                                except OSError:
+                                    pass
+
+                    except ImportError:
+                        yield {"error": "mlx-vlm is required for vision models. Install with: pip install mlx-vlm"}
+                        return
+
+                else:
+                    # ── Text-only model path (mlx-lm) ──
+
+                    # Warn if images were sent to a text-only model
+                    has_images = any(
+                        isinstance(m.get("content"), list)
+                        and any(p.get("type") == "image_url" for p in m["content"] if isinstance(p, dict))
+                        for m in messages
+                    )
+                    if has_images:
+                        logger.warning("Images received but active model is text-only. Ignoring images.")
+                        yield {
+                            "warning": "This model does not support images. Text-only response.",
+                            "done": False,
+                        }
+
+                    # Detect model's max context from config
+                    max_ctx = None
+                    for m in self.models_config:
+                        if m["id"] == model_id:
+                            cw = m.get("context_window", "")
+                            if cw and cw != "Unknown":
+                                import re as _re
+                                match = _re.match(r"^(\d+)k$", str(cw), _re.IGNORECASE)
+                                if match:
+                                    max_ctx = int(match.group(1)) * 1024
+                                else:
+                                    try:
+                                        max_ctx = int(cw)
+                                    except ValueError:
+                                        pass
                             break
-                        yield {"text": token_text, "done": False}
-                finally:
-                    gen.close()
+
+                    # Prepare prompt with chat template
+                    # For text-only path, flatten any multipart content to strings
+                    flat_messages = self._flatten_messages_to_text(messages)
+
+                    if hasattr(tokenizer, "apply_chat_template"):
+                        try:
+                            prompt = tokenizer.apply_chat_template(flat_messages, tokenize=False, add_generation_prompt=True)
+                        except Exception:
+                            # Fallback: raw ChatML format
+                            parts = []
+                            for msg in flat_messages:
+                                role = msg.get("role", "user")
+                                content = msg.get("content", "")
+                                parts.append(f"<|im_start|>{role}\n{content}<|im_end|>")
+                            parts.append("<|im_start|>assistant\n")
+                            prompt = "\n".join(parts)
+                    else:
+                        prompt = flat_messages[-1]['content']
+
+                    # Truncate if prompt exceeds model context (FIFO: drop oldest messages)
+                    if max_ctx and max_ctx > 0:
+                        reserve_tokens = max_tokens
+                        prompt_limit = max_ctx - reserve_tokens
+                        if prompt_limit < 128:
+                            prompt_limit = 128
+                        token_count = len(tokenizer.encode(prompt))
+                        if token_count > prompt_limit:
+                            logger.warning(
+                                f"Prompt ({token_count} tokens) exceeds context limit "
+                                f"({max_ctx}) minus reserve ({reserve_tokens}). Truncating."
+                            )
+                            trimmed = list(flat_messages)
+                            while len(trimmed) > 1:
+                                trimmed.pop(0)
+                                if hasattr(tokenizer, "apply_chat_template"):
+                                    try:
+                                        prompt = tokenizer.apply_chat_template(
+                                            trimmed, tokenize=False, add_generation_prompt=True
+                                        )
+                                    except Exception:
+                                        prompt = trimmed[-1].get("content", "")
+                                else:
+                                    prompt = trimmed[-1].get("content", "")
+                                if len(tokenizer.encode(prompt)) <= prompt_limit:
+                                    break
+
+                    # Stream Generation
+                    def _generate_iter():
+                        from mlx_lm import stream_generate
+                        from mlx_lm.sample_utils import make_sampler, make_logits_processors
+
+                        sampler = make_sampler(temp=temp, top_p=top_p)
+                        logits_processors = make_logits_processors(repetition_penalty=repetition_penalty)
+
+                        for response in stream_generate(
+                            model,
+                            tokenizer,
+                            prompt=prompt,
+                            max_tokens=max_tokens,
+                            sampler=sampler,
+                            logits_processors=logits_processors
+                        ):
+                            if self.stop_event.is_set():
+                                break
+                            yield response.text
+
+                    gen = _generate_iter()
+                    try:
+                        while True:
+                            token_text = await loop.run_in_executor(None, _next_token, gen)
+                            if token_text is _SENTINEL:
+                                break
+                            yield {"text": token_text, "done": False}
+                    finally:
+                        gen.close()
 
                 yield {"text": "", "done": True}
 
@@ -693,6 +893,26 @@ class MLXEngineService:
                 self.active_jobs[job_id]["status"] = "training"
             model_id = config.get("model_id")
             dataset_path = config.get("dataset_path")
+
+            # Block fine-tuning for vision models (mlx_lm LoRA doesn't support vision_tower)
+            model_path = Path(model_id)
+            if not model_path.is_absolute():
+                sanitized = model_id.replace("/", "--")
+                model_path = self.models_dir / sanitized
+            config_file = model_path / "config.json"
+            if config_file.exists():
+                try:
+                    with open(config_file, "r") as f:
+                        cfg = json.load(f)
+                    vision_keys = ["vision_config", "visual", "image_size",
+                                   "vision_tower", "mm_projector_type", "visual_encoder"]
+                    if any(k in cfg for k in vision_keys):
+                        raise ValueError(
+                            "Fine-tuning vision models is not yet supported. "
+                            "LoRA training requires a text-only model."
+                        )
+                except json.JSONDecodeError:
+                    pass
 
             # Pre-check: reject datasets that would OOM when loaded into RAM
             _MAX_DATASET_MB = 500  # 500 MB limit for in-memory loading

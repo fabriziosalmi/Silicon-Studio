@@ -32,6 +32,7 @@ interface LoadedModel {
     path: string;
     architecture?: string;
     context_window?: number;
+    is_vision?: boolean;
 }
 
 interface GlobalStateContextType {

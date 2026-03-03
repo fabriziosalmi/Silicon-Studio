@@ -42,6 +42,7 @@ export interface ModelEntry {
     external?: boolean
     is_custom?: boolean
     is_finetuned?: boolean
+    is_vision?: boolean
     downloaded: boolean
     downloading: boolean
     local_path: string | null
@@ -186,9 +187,19 @@ export interface FineTuneParams {
     job_name?: string
 }
 
+export interface ImageUrl {
+    url: string
+}
+
+export interface ContentPart {
+    type: 'text' | 'image_url'
+    text?: string
+    image_url?: ImageUrl
+}
+
 export interface ChatMessage {
     role: 'system' | 'user' | 'assistant'
-    content: string
+    content: string | ContentPart[]
 }
 
 export interface ModelFormatInfo {
@@ -380,7 +391,7 @@ export const apiClient = {
             await throwIfNotOk(res, 'Failed to export model');
             return res.json();
         },
-        loadModel: async (modelId: string): Promise<{ status: string; model_id: string; context_window?: number; architecture?: string; warning?: string }> => {
+        loadModel: async (modelId: string): Promise<{ status: string; model_id: string; context_window?: number; architecture?: string; warning?: string; is_vision?: boolean }> => {
             const res = await fetch(`${API_BASE}/api/engine/models/load`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, BackgroundTasks
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Union
 import uuid
 import json
 import logging
@@ -130,9 +130,28 @@ async def unload_model():
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+class ImageUrl(BaseModel):
+    url: str
+
+class ContentPart(BaseModel):
+    type: str  # "text" or "image_url"
+    text: Optional[str] = None
+    image_url: Optional[ImageUrl] = None
+
 class ChatMessage(BaseModel):
     role: str = Field(min_length=1)
-    content: str
+    content: Union[str, List[ContentPart]]
+
+    @field_validator("content")
+    @classmethod
+    def validate_content(cls, v):
+        if isinstance(v, list):
+            for part in v:
+                if part.type == "image_url" and part.image_url:
+                    url = part.image_url.url
+                    if url.startswith("data:") and len(url) > 20 * 1024 * 1024:
+                        raise ValueError("Image exceeds 20 MB size limit")
+        return v
 
 class ChatRequest(BaseModel):
     model_id: str = Field(min_length=1, max_length=255)

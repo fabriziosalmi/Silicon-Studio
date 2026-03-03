@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { apiClient, cleanModelName } from '../api/client'
-import type { SandboxResult, SyntaxCheckResult, SelfAssessment, ConversationMemory } from '../api/client'
+import type { SandboxResult, SyntaxCheckResult, SelfAssessment, ConversationMemory, ContentPart } from '../api/client'
 import { PageHeader } from './ui/PageHeader'
 import { ToggleSwitch } from './ui/ToggleSwitch'
-import { Settings2, Cpu, Copy, Check, ChevronRight, ChevronLeft, Square, ArrowUp, Wand2, Shield, Zap, FileText, TestTube2, Expand, Shrink, Languages, Briefcase, MessageCircle, GraduationCap, Scale, Eye, User, Baby, FlaskConical, Feather, Plus, Download, GitFork, Play, Loader2, CircleCheck, CircleX, ShieldCheck, Brain, RefreshCcw, Database, Bot, Search, X, ChevronUp, ChevronDown, ChevronsRight } from 'lucide-react'
+import { Settings2, Cpu, Copy, Check, ChevronRight, ChevronLeft, Square, ArrowUp, Wand2, Shield, Zap, FileText, TestTube2, Expand, Shrink, Languages, Briefcase, MessageCircle, GraduationCap, Scale, Eye, User, Baby, FlaskConical, Feather, Plus, Download, GitFork, Play, Loader2, CircleCheck, CircleX, ShieldCheck, Brain, RefreshCcw, Database, Bot, Search, X, ChevronUp, ChevronDown, ChevronsRight, ImagePlus } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
@@ -24,6 +24,8 @@ interface Message {
     displayContent?: string
     actionType?: string
     sources?: SourceRef[]
+    images?: string[]               // preview URLs for display
+    fullContent?: string | ContentPart[]  // actual content sent to API (multipart)
     stats?: {
         tokensPerSecond: number;
         timeToFirstToken: number;
@@ -47,6 +49,8 @@ export function ChatInterface() {
         }
     })
     const [input, setInput] = useState('')
+    const [pendingImages, setPendingImages] = useState<{ file: File; preview: string }[]>([])
+    const fileInputRef = useRef<HTMLInputElement>(null)
     const messagesEndRef = useRef<HTMLDivElement>(null)
     const messagesContainerRef = useRef<HTMLDivElement>(null)
     const userScrolledUpRef = useRef(false)
@@ -164,6 +168,7 @@ export function ChatInterface() {
                                 path: target.local_path || '',
                                 architecture: loadResult.architecture,
                                 context_window: loadResult.context_window,
+                                is_vision: loadResult.is_vision,
                             })
                             setWalkthroughStep('done')
                         } catch {
@@ -486,11 +491,88 @@ export function ChatInterface() {
         setIsGenerating(false);
     }
 
+    // ── Vision image helpers ──
+    const addImages = useCallback((files: FileList | File[]) => {
+        const validTypes = ['image/png', 'image/jpeg', 'image/gif', 'image/webp']
+        const maxSize = 20 * 1024 * 1024 // 20 MB
+        const newImages = Array.from(files)
+            .filter(f => validTypes.includes(f.type) && f.size <= maxSize)
+            .map(f => ({ file: f, preview: URL.createObjectURL(f) }))
+        setPendingImages(prev => [...prev, ...newImages].slice(0, 4))
+    }, [])
+
+    const removeImage = useCallback((index: number) => {
+        setPendingImages(prev => {
+            URL.revokeObjectURL(prev[index].preview)
+            return prev.filter((_, i) => i !== index)
+        })
+    }, [])
+
+    const fileToBase64 = (file: File): Promise<string> => {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader()
+            reader.onload = () => resolve(reader.result as string)
+            reader.onerror = reject
+            reader.readAsDataURL(file)
+        })
+    }
+
+    const handleImagePaste = useCallback((e: React.ClipboardEvent) => {
+        if (!activeModel?.is_vision) return
+        const imageFiles: File[] = []
+        for (let i = 0; i < e.clipboardData.items.length; i++) {
+            const item = e.clipboardData.items[i]
+            if (item.type.startsWith('image/')) {
+                const file = item.getAsFile()
+                if (file) imageFiles.push(file)
+            }
+        }
+        if (imageFiles.length > 0) addImages(imageFiles)
+    }, [activeModel?.is_vision, addImages])
+
+    const handleImageDrop = useCallback((e: React.DragEvent) => {
+        e.preventDefault()
+        if (!activeModel?.is_vision) return
+        if (e.dataTransfer.files) addImages(e.dataTransfer.files)
+    }, [activeModel?.is_vision, addImages])
+
+    // Clear pending images when switching away from a vision model
+    useEffect(() => {
+        if (!activeModel?.is_vision && pendingImages.length > 0) {
+            pendingImages.forEach(img => URL.revokeObjectURL(img.preview))
+            setPendingImages([])
+        }
+    }, [activeModel?.is_vision])
+
     const handleSend = async (directPrompt?: string, displayContent?: string, actionType?: string) => {
         const text = directPrompt ?? input;
-        if (!text.trim() || !currentModelId || isGenerating) return
+        if ((!text.trim() && pendingImages.length === 0) || !currentModelId || isGenerating) return
 
-        const userMsg: Message = { role: 'user', content: text, ...(displayContent && { displayContent }), ...(actionType && { actionType }) }
+        // Build multipart content if images are attached to a vision model
+        let fullContent: string | ContentPart[] = text
+        const imagePreviewUrls: string[] = []
+        if (pendingImages.length > 0 && activeModel?.is_vision) {
+            const parts: ContentPart[] = []
+            if (text.trim()) {
+                parts.push({ type: 'text', text: text.trim() })
+            }
+            for (const img of pendingImages) {
+                const dataUrl = await fileToBase64(img.file)
+                parts.push({ type: 'image_url', image_url: { url: dataUrl } })
+                imagePreviewUrls.push(img.preview)
+            }
+            fullContent = parts
+            setPendingImages([])  // clear without revoking — previews still needed for display
+        }
+
+        const userMsg: Message = {
+            role: 'user',
+            content: text || '(image)',
+            ...(displayContent && { displayContent }),
+            ...(actionType && { actionType }),
+            ...(imagePreviewUrls.length > 0 && { images: imagePreviewUrls }),
+            ...(Array.isArray(fullContent) && { fullContent }),
+        }
 
         // Build system prompt with optional reasoning instructions
         let systemContent = settings.systemPrompt?.trim() || '';
@@ -597,7 +679,7 @@ export function ChatInterface() {
                 signal: abortRef.current.signal,
                 body: JSON.stringify({
                     model_id: currentModelId,
-                    messages: conversation.map(m => ({ role: m.role, content: m.content })),
+                    messages: conversation.map(m => ({ role: m.role, content: m.fullContent || m.content })),
                     temperature: settings.temperature,
                     max_tokens: settings.maxTokens,
                     top_p: settings.topP,
@@ -1432,6 +1514,13 @@ Return exactly this JSON structure (no other text):
                                                         </div>
                                                     )}
                                                 </div>
+                                                {msg.images && msg.images.length > 0 && (
+                                                    <div className="flex gap-2 mt-2 ml-9">
+                                                        {msg.images.map((src, i) => (
+                                                            <img key={i} src={src} className="max-w-[200px] max-h-[200px] rounded-lg border border-white/10 object-cover" alt="Attached" />
+                                                        ))}
+                                                    </div>
+                                                )}
                                             </div>
                                         )
                                     }
@@ -1538,8 +1627,39 @@ Return exactly this JSON structure (no other text):
                     )}
 
                     {/* Input Area */}
-                    <div className="px-4 pb-2 pt-3">
+                    <div className="px-4 pb-2 pt-3"
+                        onDragOver={(e) => { if (activeModel?.is_vision) e.preventDefault() }}
+                        onDrop={handleImageDrop}
+                    >
                         <div className="max-w-3xl mx-auto">
+                            {/* Image previews */}
+                            {pendingImages.length > 0 && (
+                                <div className="flex gap-2 px-2 pb-2">
+                                    {pendingImages.map((img, i) => (
+                                        <div key={i} className="relative w-16 h-16 rounded-lg overflow-hidden border border-white/10 group">
+                                            <img src={img.preview} className="w-full h-full object-cover" alt="" />
+                                            <button
+                                                type="button"
+                                                title="Remove image"
+                                                onClick={() => removeImage(i)}
+                                                className="absolute top-0 right-0 p-0.5 bg-black/70 rounded-bl text-gray-300 hover:text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                                            >
+                                                <X className="w-3 h-3" />
+                                            </button>
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {/* Hidden file input for image attachment */}
+                            <input
+                                ref={fileInputRef}
+                                type="file"
+                                accept="image/png,image/jpeg,image/gif,image/webp"
+                                multiple
+                                title="Select images to attach"
+                                className="hidden"
+                                onChange={(e) => { if (e.target.files) addImages(e.target.files); e.target.value = '' }}
+                            />
                             {/* Input field */}
                             <div className="relative bg-white/[0.03] border border-white/10 rounded-xl focus-within:border-white/20 transition-colors">
                                 <textarea
@@ -1547,12 +1667,22 @@ Return exactly this JSON structure (no other text):
                                     value={input}
                                     onChange={(e) => setInput(e.target.value)}
                                     onKeyDown={handleKeyDown}
-                                    placeholder={isGenerating ? "Generating..." : "Send a message..."}
+                                    onPaste={handleImagePaste}
+                                    placeholder={isGenerating ? "Generating..." : activeModel?.is_vision ? "Send a message or paste an image..." : "Send a message..."}
                                     disabled={isGenerating}
-                                    className={`w-full bg-transparent px-4 py-3 pr-14 text-sm text-gray-200 placeholder-gray-500 outline-none resize-none min-h-[44px] max-h-[200px] ${isGenerating ? 'opacity-40' : ''}`}
+                                    className={`w-full bg-transparent px-4 py-3 ${activeModel?.is_vision ? 'pr-24' : 'pr-14'} text-sm text-gray-200 placeholder-gray-500 outline-none resize-none min-h-[44px] max-h-[200px] ${isGenerating ? 'opacity-40' : ''}`}
                                     rows={1}
                                 />
-                                <div className="absolute right-2 bottom-2">
+                                <div className="absolute right-2 bottom-2 flex items-center gap-1">
+                                    {activeModel?.is_vision && !isGenerating && (
+                                        <button
+                                            onClick={() => fileInputRef.current?.click()}
+                                            className="p-1.5 rounded-lg text-gray-500 hover:text-white hover:bg-white/10 transition-colors"
+                                            title="Attach image"
+                                        >
+                                            <ImagePlus className="w-4 h-4" />
+                                        </button>
+                                    )}
                                     {isGenerating ? (
                                         <button
                                             onClick={handleStop}
@@ -1564,9 +1694,9 @@ Return exactly this JSON structure (no other text):
                                     ) : (
                                         <button
                                             onClick={() => handleSend()}
-                                            disabled={!input.trim() || !currentModelId}
-                                            title={!currentModelId ? 'Load a model first' : !input.trim() ? 'Type a message' : 'Send message'}
-                                            className={`p-1.5 rounded-lg transition-colors ${input.trim() && currentModelId ? 'bg-white text-black hover:bg-gray-200' : 'bg-white/5 text-gray-700 cursor-not-allowed'}`}
+                                            disabled={(!input.trim() && pendingImages.length === 0) || !currentModelId}
+                                            title={!currentModelId ? 'Load a model first' : (!input.trim() && pendingImages.length === 0) ? 'Type a message' : 'Send message'}
+                                            className={`p-1.5 rounded-lg transition-colors ${(input.trim() || pendingImages.length > 0) && currentModelId ? 'bg-white text-black hover:bg-gray-200' : 'bg-white/5 text-gray-700 cursor-not-allowed'}`}
                                         >
                                             <ArrowUp className="w-4 h-4" />
                                         </button>

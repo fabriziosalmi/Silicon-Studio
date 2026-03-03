@@ -122,6 +122,7 @@ export function ModelsInterface() {
                 path: model.local_path || model.id,
                 architecture: model.architecture,
                 context_window: result.context_window ?? parseContextWindow(model.context_window),
+                is_vision: result.is_vision,
             });
             if (result.warning) {
                 toast(result.warning, 'warning');

@@ -65,6 +65,7 @@ export function TopBar() {
                 path: model.local_path || model.id,
                 architecture: model.architecture,
                 context_window: result.context_window,
+                is_vision: result.is_vision,
             });
             setShowModelMenu(false);
         } catch { /* ignore */ }
