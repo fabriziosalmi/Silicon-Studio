@@ -35,7 +35,7 @@ export function MonacoEditor({ filePath, content, language, onSave, onChange }: 
   onSaveRef.current = onSave
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const handleEditorDidMount = useCallback((editor: any, monaco: any) => {
+  const handleEditorDidMount = useCallback((editor: any, _monaco: any) => {
     editorRef.current = editor
 
     // Cmd+S to save — uses refs to avoid stale closure
@@ -74,15 +74,7 @@ export function MonacoEditor({ filePath, content, language, onSave, onChange }: 
       })
     }
 
-    // Group separator for NanoCore actions
-    editor.addAction({
-      id: 'nano.separator',
-      label: '──────────',
-      contextMenuGroupId: '9_nanocore',
-      contextMenuOrder: 0,
-      precondition: monaco.editor.EditorContextKeys.hasNonEmptySelection?.key || 'editorHasSelection',
-      run: () => {},
-    })
+    // no-op: separator not needed, actions are grouped under 9_nanocore
   }, [])
 
   // Listen for "Apply" from code block snippets in agent output
