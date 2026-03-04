@@ -1,8 +1,61 @@
-import { useState, useEffect, useRef, memo, type ComponentProps } from 'react'
+import { useState, useEffect, useRef, useCallback, memo, type ComponentProps } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { Copy, Check, FileInput } from 'lucide-react'
 
 const DEBOUNCE_MS = 120
+
+/**
+ * Code block with Copy / Apply actions.
+ */
+function CodeBlock({ lang, code }: { lang: string; code: string }) {
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(code.replace(/\n$/, ''))
+    setCopied(true)
+    setTimeout(() => setCopied(false), 1500)
+  }, [code])
+
+  const handleApply = useCallback(() => {
+    window.dispatchEvent(new CustomEvent('nanocore-apply-snippet', { detail: code.replace(/\n$/, '') }))
+  }, [code])
+
+  return (
+    <div className="my-2 rounded-lg overflow-hidden border border-white/[0.06] group">
+      <div className="flex items-center justify-between px-3 py-1 bg-white/[0.03] border-b border-white/[0.06]">
+        {lang ? (
+          <span className="text-[10px] text-gray-500 font-mono uppercase tracking-wider">{lang}</span>
+        ) : (
+          <span />
+        )}
+        <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            type="button"
+            onClick={handleCopy}
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+            title="Copy code"
+          >
+            {copied ? <Check size={10} className="text-green-400" /> : <Copy size={10} />}
+            {copied ? 'Copied' : 'Copy'}
+          </button>
+          <button
+            type="button"
+            onClick={handleApply}
+            className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] text-gray-400 hover:text-white hover:bg-white/10 transition-colors"
+            title="Apply to active file"
+          >
+            <FileInput size={10} />
+            Apply
+          </button>
+        </div>
+      </div>
+      <pre className="px-3 py-2 bg-white/[0.02] text-[12px] font-mono text-gray-200 leading-relaxed overflow-x-auto">
+        <code>{code}</code>
+      </pre>
+    </div>
+  )
+}
 
 /**
  * Custom components for ReactMarkdown — dark-themed, matching Companion patterns.
@@ -51,18 +104,8 @@ const markdownComponents: ComponentProps<typeof ReactMarkdown>['components'] = {
 
     if (isBlock) {
       const lang = match?.[1] || ''
-      return (
-        <div className="my-2 rounded-lg overflow-hidden border border-white/[0.06]">
-          {lang && (
-            <div className="px-3 py-1 bg-white/[0.03] border-b border-white/[0.06] text-[10px] text-gray-500 font-mono uppercase tracking-wider">
-              {lang}
-            </div>
-          )}
-          <pre className="px-3 py-2 bg-white/[0.02] text-[12px] font-mono text-gray-200 leading-relaxed overflow-x-auto">
-            <code>{children}</code>
-          </pre>
-        </div>
-      )
+      const codeText = typeof children === 'string' ? children : String(children ?? '')
+      return <CodeBlock lang={lang} code={codeText} />
     }
     return (
       <code className="bg-white/[0.06] px-1.5 py-0.5 rounded text-[12px] font-mono text-blue-300" {...props}>
