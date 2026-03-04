@@ -37,16 +37,20 @@ export function AgentInputBar({ onSubmit, onStop, isRunning, disabled }: AgentIn
 
   const canSend = value.trim().length > 0 && !disabled && !isRunning
 
+  // Block all pointer/mouse events from reaching Monaco in capture phase
+  const blockPropagation = (e: React.SyntheticEvent) => {
+    e.stopPropagation()
+    e.nativeEvent.stopImmediatePropagation()
+  }
+
   return (
     <div
       className="shrink-0 px-3 py-2.5 bg-black/20 border-t border-white/5"
-      onMouseDownCapture={(e) => {
-        // Capture phase: stop Monaco from reclaiming focus before it sees the event
-        e.stopPropagation()
-      }}
-      onMouseDown={() => {
+      onPointerDownCapture={blockPropagation}
+      onMouseDownCapture={blockPropagation}
+      onClick={() => {
         if (!disabled && !isRunning) {
-          setTimeout(() => textareaRef.current?.focus(), 0)
+          textareaRef.current?.focus()
         }
       }}
     >
@@ -60,6 +64,7 @@ export function AgentInputBar({ onSubmit, onStop, isRunning, disabled }: AgentIn
           value={value}
           onChange={(e) => setValue(e.target.value)}
           onKeyDown={handleKeyDown}
+          onPointerDown={(e) => e.stopPropagation()}
           onMouseDown={(e) => e.stopPropagation()}
           placeholder={disabled ? 'Load a model first...' : 'Ask the agent to edit code...'}
           disabled={disabled || isRunning}

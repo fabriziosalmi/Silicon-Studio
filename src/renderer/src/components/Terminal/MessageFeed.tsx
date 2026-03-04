@@ -6,12 +6,19 @@ import { apiClient } from '../../api/client'
 import type { FeedItem } from './types'
 
 // Strip XML tool/arg tags that may leak through the backend SSE stream.
-// Matches both complete blocks (<tool ...>...</tool>) and orphaned tags.
 const TOOL_BLOCK_RE = /<tool\s+name="[^"]*">[\s\S]*?<\/tool>/g
 const STRAY_TAG_RE = /<\/?(?:tool|arg)\b[^>]*>/g
+// Strip <think>...</think> reasoning blocks from models like Qwen3
+const THINK_BLOCK_RE = /<think>[\s\S]*?<\/think>/g
+const STRAY_THINK_RE = /<\/?think[^>]*>/g
 
-function stripToolXml(text: string): string {
-  return text.replace(TOOL_BLOCK_RE, '').replace(STRAY_TAG_RE, '').trim()
+function stripModelTags(text: string): string {
+  return text
+    .replace(TOOL_BLOCK_RE, '')
+    .replace(STRAY_TAG_RE, '')
+    .replace(THINK_BLOCK_RE, '')
+    .replace(STRAY_THINK_RE, '')
+    .trim()
 }
 
 interface MessageFeedProps {
@@ -192,7 +199,7 @@ const FeedItemView = memo(function FeedItemView({
       )
 
     case 'ai_text': {
-      const cleanContent = stripToolXml(item.content)
+      const cleanContent = stripModelTags(item.content)
       if (!cleanContent) return null
       return (
         <div className="flex items-start gap-2">
