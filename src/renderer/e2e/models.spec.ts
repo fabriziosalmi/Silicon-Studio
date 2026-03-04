@@ -42,8 +42,9 @@ test.describe('Models Page', () => {
     await expect(page.locator('input[placeholder*="Search"]')).toBeVisible({ timeout: 5000 })
   })
 
-  test('shows model context window and size columns', async ({ page }) => {
-    await expect(page.getByText('4096').first()).toBeVisible({ timeout: 5000 })
-    await expect(page.getByText('1.8GB').first()).toBeVisible({ timeout: 5000 })
+  test('shows model context window and size in table', async ({ page }) => {
+    // Use locators that exclude hidden option elements inside select dropdowns
+    await expect(page.locator('td, span, div, p').filter({ hasText: '4096' }).first()).toBeVisible({ timeout: 5000 })
+    await expect(page.locator('td, span, div, p').filter({ hasText: '1.8GB' }).first()).toBeVisible({ timeout: 5000 })
   })
 })

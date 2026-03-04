@@ -150,7 +150,7 @@ export async function mockBackendAPIs(page: Page) {
         memory: { total: 36_000_000_000, available: 20_000_000_000, used: 16_000_000_000, percent: 44.4 },
         cpu: { cores: 10, percent: 12.5 },
         disk: { total: 500_000_000_000, free: 200_000_000_000, used: 300_000_000_000, percent: 60 },
-        platform: { system: 'Darwin', processor: 'Apple M3 Max' },
+        platform: { system: 'Darwin', processor: 'Apple M3 Max', release: '25.3.0' },
       }),
     })
   )

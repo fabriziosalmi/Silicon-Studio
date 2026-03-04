@@ -40,12 +40,13 @@ export function NotesProvider({ children }: { children: React.ReactNode }) {
     }, [])
 
     const handleDeleteNote = useCallback(async (id: string) => {
+        if (!window.confirm('Delete this note?')) return
         try {
             await apiClient.notes.delete(id)
             setNotesList(prev => prev.filter(n => n.id !== id))
             if (activeNoteId === id) setActiveNoteId(null)
-        } catch {
-            // ignore
+        } catch (err) {
+            console.error('Failed to delete note:', err)
         }
     }, [activeNoteId])
 

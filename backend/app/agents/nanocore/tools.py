@@ -43,6 +43,18 @@ PROTECTED_PATHS = [
     "/Applications",
 ]
 
+
+def _is_protected_path(file_path: str) -> str | None:
+    """Check if a resolved path falls under a protected system directory.
+
+    Returns the blocked path prefix or None if safe.
+    """
+    resolved = str(Path(file_path).resolve())
+    for ppath in PROTECTED_PATHS:
+        if resolved == ppath or resolved.startswith(ppath + "/"):
+            return ppath
+    return None
+
 # Commands that require explicit user confirmation (handled via diff approval flow)
 DESTRUCTIVE_PREFIXES = [
     "rm ", "rm\t", "rmdir ",
@@ -241,15 +253,15 @@ async def read_file(file_path: str, max_lines: int = 300) -> dict:
     Returns {file_path, content, lines, error}. If error is set, the
     file could not be read.
     """
-    # Safety: block reads of system paths
-    for ppath in PROTECTED_PATHS:
-        if file_path.startswith(ppath):
-            return {
-                "file_path": file_path,
-                "content": "",
-                "lines": 0,
-                "error": f"Blocked: cannot read files in protected path {ppath}",
-            }
+    # Safety: block reads of system paths (resolve to catch traversal)
+    blocked = _is_protected_path(file_path)
+    if blocked:
+        return {
+            "file_path": file_path,
+            "content": "",
+            "lines": 0,
+            "error": f"Blocked: cannot read files in protected path {blocked}",
+        }
 
     p = Path(file_path)
     if not p.exists():
@@ -316,15 +328,15 @@ async def generate_edit_diff(file_path: str, new_content: str) -> dict:
     Returns {file_path, old, new, diff}. Blocks writes to protected paths.
     Uses aiofiles to avoid blocking the event loop on file reads.
     """
-    # Safety: block edits to system paths
-    for ppath in PROTECTED_PATHS:
-        if file_path.startswith(ppath):
-            return {
-                "file_path": file_path,
-                "old": "",
-                "new": "",
-                "diff": f"Blocked: cannot edit files in protected path {ppath}",
-            }
+    # Safety: block edits to system paths (resolve to catch traversal)
+    blocked = _is_protected_path(file_path)
+    if blocked:
+        return {
+            "file_path": file_path,
+            "old": "",
+            "new": "",
+            "diff": f"Blocked: cannot edit files in protected path {blocked}",
+        }
 
     p = Path(file_path)
     if p.exists():
@@ -365,16 +377,16 @@ async def apply_patch_content(file_path: str, search: str, replace: str) -> dict
     {file_path, old, new, diff, error}. If error is set, the patch was not
     valid (search not found, ambiguous match, etc.) and the file was NOT modified.
     """
-    # Safety: block patches to system paths
-    for ppath in PROTECTED_PATHS:
-        if file_path.startswith(ppath):
-            return {
-                "file_path": file_path,
-                "old": "",
-                "new": "",
-                "diff": "",
-                "error": f"Blocked: cannot edit files in protected path {ppath}",
-            }
+    # Safety: block patches to system paths (resolve to catch traversal)
+    blocked = _is_protected_path(file_path)
+    if blocked:
+        return {
+            "file_path": file_path,
+            "old": "",
+            "new": "",
+            "diff": "",
+            "error": f"Blocked: cannot edit files in protected path {blocked}",
+        }
 
     p = Path(file_path)
     if not p.exists():
@@ -449,11 +461,11 @@ async def apply_edit(file_path: str, new_content: str) -> bool:
     Uses a temp file + os.replace for POSIX-atomic writes.
     Runs the blocking I/O in an executor to avoid blocking the event loop.
     """
-    # Safety: never write to system paths
-    for ppath in PROTECTED_PATHS:
-        if file_path.startswith(ppath):
-            logger.error(f"Refused to write to protected path: {file_path}")
-            return False
+    # Safety: never write to system paths (resolve to catch traversal)
+    blocked = _is_protected_path(file_path)
+    if blocked:
+        logger.error(f"Refused to write to protected path: {file_path} (resolves under {blocked})")
+        return False
 
     def _write_atomic():
         p = Path(file_path)

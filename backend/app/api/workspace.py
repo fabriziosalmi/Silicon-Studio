@@ -213,7 +213,12 @@ async def rename_file(req: RenameRequest):
     path = _validate_path(req.path)
     if not path.exists():
         raise HTTPException(status_code=404, detail="File not found")
+    # Block path separators in new_name to prevent traversal
+    if "/" in req.new_name or "\\" in req.new_name:
+        raise HTTPException(status_code=400, detail="new_name must not contain path separators")
     new_path = path.parent / req.new_name
+    # Validate the destination path too
+    _validate_path(str(new_path))
     if new_path.exists():
         raise HTTPException(status_code=409, detail="A file with that name already exists")
     try:
@@ -225,14 +230,18 @@ async def rename_file(req: RenameRequest):
 
 @router.post("/delete")
 async def delete_file(req: DeleteRequest):
-    """Delete a file or empty directory."""
+    """Delete a file or directory (recursive for non-empty directories)."""
     path = _validate_path(req.path)
     if not path.exists():
         raise HTTPException(status_code=404, detail="File not found")
     try:
         if path.is_dir():
-            import shutil
-            shutil.rmtree(path)
+            # Try non-recursive first; fall back to rmtree for non-empty dirs
+            try:
+                path.rmdir()
+            except OSError:
+                import shutil
+                shutil.rmtree(path)
         else:
             path.unlink()
     except OSError as e:

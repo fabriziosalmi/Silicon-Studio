@@ -93,20 +93,21 @@ export function CodeWorkspace() {
 
   const handleCloseFile = useCallback((path: string, e?: React.MouseEvent) => {
     e?.stopPropagation()
-    setOpenFiles(prev => prev.filter(f => f.path !== path))
+    setOpenFiles(prev => {
+      const remaining = prev.filter(f => f.path !== path)
+      // Update active file using fresh filtered list (avoids stale closure)
+      if (activeFile === path) {
+        setActiveFile(remaining.length > 0 ? remaining[remaining.length - 1].path : null)
+      }
+      return remaining
+    })
     // Clear any pending diff for this file
     setPendingDiffs(prev => {
       const next = new Map(prev)
       next.delete(path)
       return next
     })
-    if (activeFile === path) {
-      setActiveFile(() => {
-        const remaining = openFiles.filter(f => f.path !== path)
-        return remaining.length > 0 ? remaining[remaining.length - 1].path : null
-      })
-    }
-  }, [activeFile, openFiles])
+  }, [activeFile])
 
   const handleSave = useCallback(async (path: string, content: string) => {
     try {
@@ -185,18 +186,21 @@ export function CodeWorkspace() {
   const handleDeleteFile = useCallback(async (filePath: string) => {
     try {
       await apiClient.workspace.deleteFile(filePath)
-      setOpenFiles(prev => prev.filter(f => f.path !== filePath))
-      if (activeFile === filePath) {
-        const remaining = openFiles.filter(f => f.path !== filePath)
-        setActiveFile(remaining.length > 0 ? remaining[remaining.length - 1].path : null)
-      }
+      setOpenFiles(prev => {
+        const remaining = prev.filter(f => f.path !== filePath)
+        // Update active file using fresh filtered list (avoids stale closure)
+        if (activeFile === filePath) {
+          setActiveFile(remaining.length > 0 ? remaining[remaining.length - 1].path : null)
+        }
+        return remaining
+      })
       await refreshTree()
     } catch (err) {
       setSaveStatus(err instanceof Error ? err.message : 'Delete failed')
       if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
       saveTimerRef.current = setTimeout(() => setSaveStatus(null), 3000)
     }
-  }, [activeFile, openFiles, refreshTree])
+  }, [activeFile, refreshTree])
 
   // Diff approval: apply the new content to the file
   const handleDiffApprove = useCallback((filePath: string) => {

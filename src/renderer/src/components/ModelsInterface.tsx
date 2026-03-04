@@ -188,7 +188,9 @@ export function ModelsInterface() {
                 setLoading(true);
                 // Register one by one for the selected ones
                 for (const path of Array.from(selectedPaths)) {
-                    await apiClient.engine.registerModel(customName, path, "");
+                    const found = foundModels.find(m => (m.path || m.local_path) === path);
+                    const name = found?.name || path.split('/').pop() || customName;
+                    await apiClient.engine.registerModel(name, path, "");
                 }
                 await fetchModels();
                 resetAddModal();

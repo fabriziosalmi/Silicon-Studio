@@ -2,13 +2,13 @@
 
 interface ElectronAPI {
   ping: () => Promise<void>
-  selectFile: () => Promise<string | undefined>
-  selectDirectory: () => Promise<string | undefined>
+  selectFile: () => Promise<string | null>
+  selectDirectory: () => Promise<string | null>
   getBackendPort: () => Promise<number>
   getLogPath: () => Promise<string>
-  openPath: (path: string) => Promise<void>
+  openPath: (path: string) => Promise<string>
   installUpdate: () => Promise<void>
-  onUpdateDownloaded: (callback: (version: string) => void) => void
+  onUpdateDownloaded: (callback: (version: string) => void) => (() => void) | void
 }
 
 interface Window {

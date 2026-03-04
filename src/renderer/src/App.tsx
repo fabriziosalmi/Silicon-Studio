@@ -36,10 +36,11 @@ function App() {
   const [updateVersion, setUpdateVersion] = useState('')
 
   useEffect(() => {
-    window.electronAPI?.onUpdateDownloaded?.((version: string) => {
+    const cleanup = window.electronAPI?.onUpdateDownloaded?.((version: string) => {
       setUpdateReady(true);
       setUpdateVersion(version);
     });
+    return () => { cleanup?.(); };
   }, []);
 
   const toggleSidebar = () => {

@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import List, Dict, Any, Optional
 import time
 
+from app.agents.nanocore.tools import _is_blocked
+
 logger = logging.getLogger(__name__)
 
 # Hard cap on nodes per agent execution to prevent infinite loops
@@ -182,6 +184,11 @@ class AgentService:
         command = node_data.get("command", "")
         if not command:
             return input_text
+
+        # Safety: apply the same blocklist as nanocore agent shell
+        blocked = _is_blocked(command)
+        if blocked:
+            return f"[Blocked] {blocked}"
 
         try:
             import shlex
