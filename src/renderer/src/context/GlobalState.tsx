@@ -62,6 +62,7 @@ export function GlobalStateProvider({ children }: { children: React.ReactNode })
     // Poll backend health + stats — only update state when values actually change
     // to avoid unnecessary re-renders that cause visible flicker
     const lastStatsJson = useRef<string>('');
+    const lastActiveModelId = useRef<string | null>(null);
 
     useEffect(() => {
         let mounted = true;
@@ -80,6 +81,19 @@ export function GlobalStateProvider({ children }: { children: React.ReactNode })
                     if (json !== lastStatsJson.current) {
                         lastStatsJson.current = json;
                         setSystemStats(stats as unknown as SystemStats);
+                    }
+
+                    // Sync active model state with backend
+                    try {
+                        const { model } = await apiClient.engine.getActiveModel();
+                        if (!mounted) return;
+                        const newId = model?.id ?? null;
+                        if (newId !== lastActiveModelId.current) {
+                            lastActiveModelId.current = newId;
+                            setActiveModel(model);
+                        }
+                    } catch {
+                        // ignore — endpoint may not exist on older backends
                     }
                 }
             } catch {

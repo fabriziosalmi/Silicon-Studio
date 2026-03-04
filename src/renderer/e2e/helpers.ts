@@ -167,6 +167,15 @@ export async function mockBackendAPIs(page: Page) {
     })
   )
 
+  // Engine active model (must be before the generic /models route)
+  await page.route('**/api/engine/models/active', (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: 'application/json',
+      body: JSON.stringify({ model: null }),
+    })
+  )
+
   // Engine models
   await page.route('**/api/engine/models', (route) => {
     if (route.request().method() === 'GET') {

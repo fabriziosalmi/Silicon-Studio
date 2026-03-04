@@ -53,6 +53,26 @@ async def list_models():
     """List supported base models with their local download status."""
     return service.get_models_status()
 
+@router.get("/models/active")
+async def get_active_model():
+    """Return the currently loaded model, or null if none."""
+    if not service.active_model_id:
+        return {"model": None}
+    # Find full model info
+    for m in service.models_config:
+        if m["id"] == service.active_model_id:
+            meta = service.get_active_model_metadata()
+            return {"model": {
+                "id": m["id"],
+                "name": m.get("name", ""),
+                "size": m.get("size", ""),
+                "path": m.get("local_path") or m["id"],
+                "architecture": m.get("architecture"),
+                "context_window": meta.get("context_window"),
+                "is_vision": meta.get("is_vision", False),
+            }}
+    return {"model": None}
+
 class DownloadRequest(BaseModel):
     model_id: str = Field(min_length=1, max_length=255)
 

@@ -405,6 +405,11 @@ export const apiClient = {
             });
             await throwIfNotOk(res, 'Failed to unload model');
             return res.json();
+        },
+        getActiveModel: async (): Promise<{ model: { id: string; name: string; size: string; path: string; architecture?: string; context_window?: number; is_vision?: boolean } | null }> => {
+            const res = await fetch(`${API_BASE}/api/engine/models/active`);
+            await throwIfNotOk(res, 'Failed to get active model');
+            return res.json();
         }
     },
     rag: {
