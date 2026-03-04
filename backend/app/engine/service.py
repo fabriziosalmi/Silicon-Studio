@@ -427,7 +427,14 @@ class MLXEngineService:
         Includes VRAM cleanup for Apple Silicon.
         """
         if self.generation_lock.locked():
-            raise RuntimeError("Cannot switch models while generation is in progress")
+            # A generation may be running — signal it to stop and wait briefly
+            self.stop_event.set()
+            try:
+                await asyncio.wait_for(self.generation_lock.acquire(), timeout=5.0)
+                self.generation_lock.release()
+            except asyncio.TimeoutError:
+                raise RuntimeError("Cannot switch models while generation is in progress")
+
         async with self.generation_lock:
             await self._load_model_impl(model_id)
 

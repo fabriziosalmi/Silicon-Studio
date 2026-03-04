@@ -42,8 +42,8 @@ test.describe('Models Page', () => {
     await expect(page.locator('input[placeholder*="Search"]')).toBeVisible({ timeout: 5000 })
   })
 
-  test('shows model architecture and quantization', async ({ page }) => {
-    await expect(page.getByText('LlamaForCausalLM').first()).toBeVisible({ timeout: 5000 })
-    await expect(page.getByText('4-BIT').first()).toBeVisible({ timeout: 5000 })
+  test('shows model context window and size columns', async ({ page }) => {
+    await expect(page.getByText('4096').first()).toBeVisible({ timeout: 5000 })
+    await expect(page.getByText('1.8GB').first()).toBeVisible({ timeout: 5000 })
   })
 })

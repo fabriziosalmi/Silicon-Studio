@@ -68,8 +68,9 @@ export function TopBar() {
                 is_vision: result.is_vision,
             });
             setShowModelMenu(false);
-        } catch { /* ignore */ }
-        finally { setLoadingModelId(null); }
+        } catch (err) {
+            console.error('Failed to load model from top bar:', err)
+        } finally { setLoadingModelId(null); }
     };
 
     const toggleMenu = async () => {
