@@ -10,7 +10,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 # Messages to always keep in full (first = system, last N = recent turns)
-KEEP_TAIL_COUNT = 4
+KEEP_TAIL_COUNT = 6
 
 
 def count_tokens(text: str) -> int:
@@ -31,25 +31,27 @@ def _message_tokens(msg: dict) -> int:
 
 
 def _summarize_assistant(content: str) -> str:
-    """Compress an assistant message to its first 200 chars."""
-    if len(content) <= 200:
+    """Compress an assistant message, keeping plan/reasoning and conclusion."""
+    if len(content) <= 500:
         return content
-    return content[:200] + "..."
+    return content[:300] + "\n[...compressed...]\n" + content[-200:]
 
 
 def _summarize_tool_result(content: str) -> str:
-    """Compress a tool result message to just outcome lines."""
+    """Compress a tool result, keeping errors and key outcomes."""
     lines = content.splitlines()
     outcome_lines = []
     for line in lines:
-        stripped = line.strip()
-        # Keep lines that look like results/summaries
-        if stripped.startswith("[") or stripped.startswith("Applied") or stripped.startswith("Error"):
-            outcome_lines.append(stripped)
+        s = line.strip()
+        if s.startswith("[") or s.startswith("Applied") or s.startswith("Error") \
+                or s.startswith("Traceback") or s.startswith("File ") \
+                or "error" in s.lower()[:20] or "success" in s.lower()[:20]:
+            outcome_lines.append(s)
     if outcome_lines:
-        return "\n".join(outcome_lines)
-    # Fallback: first 100 chars
-    return content[:100] + "..." if len(content) > 100 else content
+        return "\n".join(outcome_lines[:20])
+    if len(content) > 300:
+        return content[:150] + "\n[...]\n" + content[-150:]
+    return content
 
 
 class ContextManager:

@@ -107,13 +107,13 @@ const EscalationCard = memo(function EscalationCard({
  * Inspired by Companion's ToolBlock pattern.
  */
 function CollapsibleToolOutput({ item }: { item: FeedItem }) {
-  const [open, setOpen] = useState(false)
   const command = item.toolMeta?.command || ''
   const lines = item.content.split(/\r?\n/)
   const hasMore = lines.length > 20
   const [showFull, setShowFull] = useState(false)
   const rendered = showFull || !hasMore ? item.content : lines.slice(-20).join('\n')
   const isError = item.toolMeta?.exitCode !== undefined && item.toolMeta.exitCode !== 0
+  const [open, setOpen] = useState(isError) // auto-expand on error
 
   return (
     <div className="rounded-[10px] overflow-hidden border border-white/[0.06] bg-white/[0.02]">

@@ -80,14 +80,24 @@ export function useAgentSession(options?: UseAgentSessionOptions) {
     return () => { abortRef.current?.abort() }
   }, [])
 
-  // Persist feed
+  // Persist feed (debounced — avoid serializing megabytes per token during streaming)
+  const persistFeedTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
-    try { sessionStorage.setItem(STORAGE_KEY_FEED, JSON.stringify(feedItems)) } catch { /* quota */ }
+    if (persistFeedTimer.current) clearTimeout(persistFeedTimer.current)
+    persistFeedTimer.current = setTimeout(() => {
+      try { sessionStorage.setItem(STORAGE_KEY_FEED, JSON.stringify(feedItems)) } catch { /* quota */ }
+    }, 500)
+    return () => { if (persistFeedTimer.current) clearTimeout(persistFeedTimer.current) }
   }, [feedItems])
 
-  // Persist telemetry
+  // Persist telemetry (debounced)
+  const persistTelemetryTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
-    try { sessionStorage.setItem(STORAGE_KEY_TELEMETRY, JSON.stringify(telemetry)) } catch { /* quota */ }
+    if (persistTelemetryTimer.current) clearTimeout(persistTelemetryTimer.current)
+    persistTelemetryTimer.current = setTimeout(() => {
+      try { sessionStorage.setItem(STORAGE_KEY_TELEMETRY, JSON.stringify(telemetry)) } catch { /* quota */ }
+    }, 500)
+    return () => { if (persistTelemetryTimer.current) clearTimeout(persistTelemetryTimer.current) }
   }, [telemetry])
 
   const addFeedItem = useCallback((item: FeedItem) => {

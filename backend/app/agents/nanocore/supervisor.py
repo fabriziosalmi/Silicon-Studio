@@ -93,7 +93,7 @@ class SupervisorAgent:
         session_id: str,
         model_id: str,
         max_iterations: int = 10,
-        temperature: float = 0.7,
+        temperature: float = 0.3,
         max_total_tokens: int = 50_000,
     ):
         self.session_id = session_id
@@ -115,8 +115,8 @@ class SupervisorAgent:
 
         # Fix 2: guardrails
         self.guardrails = LoopGuardrails(max_total_tokens=max_total_tokens)
-        # Fix 4: context manager
-        self._context_mgr = ContextManager(max_context_tokens=6000)
+        # Context manager — scale to model's context window (default 16K)
+        self._context_mgr = ContextManager(max_context_tokens=16000)
         # Fix 3: process manager
         self.process_manager = ProcessManager()
 
@@ -161,7 +161,7 @@ class SupervisorAgent:
         return {
             "agent": "supervisor",
             "state": self._state.value,
-            "tokens_used": self._total_tokens,
+            "tokens_used": self.guardrails.total_tokens,
             "elapsed_ms": (time.time() - self._start_time) * 1000,
             "iteration": iteration,
             "token_budget": self.guardrails.max_total_tokens,
@@ -273,9 +273,10 @@ class SupervisorAgent:
         yield _sse("session_start", {"session_id": self.session_id, **snapshot_info})
 
         # Fix 4: repo map cache (Fix 32: refreshes when files change)
-        repo_map_cache = RepoMapCache(os.getcwd())
+        cwd = os.getcwd()
+        repo_map_cache = RepoMapCache(cwd)
         repo_map = repo_map_cache.get()
-        system_content = SYSTEM_PROMPT
+        system_content = SYSTEM_PROMPT + f"\n\n## Environment\n\nWorking directory: {cwd}\n"
         if repo_map:
             system_content += f"\n\n## Repository Map\n\n{repo_map}\n"
 
@@ -326,7 +327,7 @@ class SupervisorAgent:
                     self.model_id,
                     fitted_messages,
                     temperature=self.temperature,
-                    max_tokens=2048,
+                    max_tokens=4096,
                 ):
                     if self._stopped:
                         engine_service.stop_generation()
