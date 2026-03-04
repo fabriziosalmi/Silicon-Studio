@@ -77,8 +77,10 @@ function App() {
 
       switch (e.key) {
         case 'k': // Cmd+K — quick switch: jump to chat
-          e.preventDefault();
-          setActiveTab('chat');
+          if (!isInput) {
+            e.preventDefault();
+            setActiveTab('chat');
+          }
           break;
         case 'n': // Cmd+N — new conversation
           if (!isInput) {
@@ -100,8 +102,10 @@ function App() {
           }
           break;
         case ',': // Cmd+, — settings (macOS convention)
-          e.preventDefault();
-          setActiveTab('settings');
+          if (!isInput) {
+            e.preventDefault();
+            setActiveTab('settings');
+          }
           break;
       }
     };
