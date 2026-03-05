@@ -768,9 +768,9 @@ export function Settings() {
                         const sysInfo = platform ? `${platform.system} ${platform.release} (${platform.processor})` : 'Unknown'
                         const params = new URLSearchParams({
                             title: '[Bug] ',
-                            body: `## Description\n\nDescribe the bug...\n\n## System Info\n\n- OS: ${sysInfo}\n- App Version: 0.7.2\n\n## Steps to Reproduce\n\n1. \n2. \n3. \n\n## Expected Behavior\n\n\n## Logs\n\nPaste relevant logs from Settings > Debug Logs\n`,
+                            body: `## Description\n\nDescribe the bug...\n\n## System Info\n\n- OS: ${sysInfo}\n- App Version: 0.7.4\n\n## Steps to Reproduce\n\n1. \n2. \n3. \n\n## Expected Behavior\n\n\n## Logs\n\nPaste relevant logs from Settings > Debug Logs\n`,
                         })
-                        window.open(`https://github.com/fabriziosalmi/Silicon-Studio/issues/new?${params.toString()}`, '_blank')
+                        window.open(`https://github.com/fabriziosalmi/silicondev/issues/new?${params.toString()}`, '_blank')
                     }}
                     className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-white/5 border border-white/10 text-gray-400 text-xs hover:bg-white/10 hover:text-white transition-colors"
                 >

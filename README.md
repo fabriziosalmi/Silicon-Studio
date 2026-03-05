@@ -76,6 +76,14 @@ Dual-mode: direct bash and NanoCore AI agent. Streaming output, diff proposals w
 ### Notes
 Markdown editor with live preview, multi-note management, send to chat.
 
+## Development Status
+
+SiliconDev is pre-v1.0 software. Some features — **Terminal**, **Code Workspace**, and **Notes** — are in active development and may change significantly between releases.
+
+If you run into bugs or rough edges, please [open an issue](https://github.com/fabriziosalmi/silicondev/issues). Every report in these early stages is extremely valuable and helps shape the app.
+
+**v1.0.0 will not be released until all current features are solid and fully polished.**
+
 ## Limitations
 
 - **macOS only.** Requires Apple Silicon (M1 or later). No Intel, no Linux, no Windows.
