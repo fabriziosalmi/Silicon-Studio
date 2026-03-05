@@ -6,6 +6,7 @@ import logging
 import os
 import re
 import shutil
+import threading
 import time
 from dataclasses import dataclass, asdict
 from pathlib import Path
@@ -40,6 +41,7 @@ class CodebaseIndexService:
 
     def __init__(self):
         INDEX_ROOT.mkdir(parents=True, exist_ok=True)
+        self._lock = threading.RLock()
         self._chunks: Optional[List[dict]] = None
         self._embeddings: Optional[np.ndarray] = None
         self._meta: Optional[dict] = None
@@ -54,166 +56,190 @@ class CodebaseIndexService:
 
     def _load_index(self, directory: str) -> bool:
         """Load an existing index from disk into memory. Returns True if found."""
-        idx_dir = self._get_index_dir(directory)
-        meta_file = idx_dir / "meta.json"
-        chunks_file = idx_dir / "chunks.json"
+        with self._lock:
+            idx_dir = self._get_index_dir(directory)
+            meta_file = idx_dir / "meta.json"
+            chunks_file = idx_dir / "chunks.json"
 
-        if not meta_file.exists() or not chunks_file.exists():
-            return False
+            if not meta_file.exists() or not chunks_file.exists():
+                return False
 
-        try:
-            with open(meta_file) as f:
-                self._meta = json.load(f)
-            with open(chunks_file) as f:
-                self._chunks = json.load(f)
+            try:
+                with open(meta_file) as f:
+                    self._meta = json.load(f)
+                with open(chunks_file) as f:
+                    self._chunks = json.load(f)
 
-            emb_file = idx_dir / "embeddings.npy"
-            if emb_file.exists():
-                self._embeddings = np.load(str(emb_file))
-            else:
-                self._embeddings = None
+                emb_file = idx_dir / "embeddings.npy"
+                if emb_file.exists():
+                    self._embeddings = np.load(str(emb_file))
+                else:
+                    self._embeddings = None
 
-            self._index_dir = idx_dir
-            return True
-        except Exception as e:
-            logger.warning("Failed to load codebase index: %s", e)
-            return False
+                self._index_dir = idx_dir
+                return True
+            except Exception as e:
+                logger.warning("Failed to load codebase index: %s", e)
+                return False
 
     def _ensure_loaded(self, directory: Optional[str] = None) -> bool:
         """Ensure index is in memory. Tries to load from disk if not."""
-        if self._chunks is not None:
-            return True
-        if directory:
-            return self._load_index(directory)
-        # Try to find any existing index
-        if INDEX_ROOT.exists():
-            for sub in INDEX_ROOT.iterdir():
-                meta_file = sub / "meta.json"
-                if meta_file.exists():
-                    try:
-                        with open(meta_file) as f:
-                            meta = json.load(f)
-                        return self._load_index(meta["root_dir"])
-                    except Exception:
-                        continue
-        return False
+        with self._lock:
+            if self._chunks is not None:
+                return True
+            if directory:
+                return self._load_index(directory)
+            latest_dir = self._latest_indexed_directory()
+            if latest_dir:
+                return self._load_index(latest_dir)
+            return False
+
+    def _latest_indexed_directory(self) -> Optional[str]:
+        """Return the most recently indexed root_dir from on-disk metadata."""
+        if not INDEX_ROOT.exists():
+            return None
+
+        candidates: List[tuple[float, str]] = []
+        for sub in INDEX_ROOT.iterdir():
+            meta_file = sub / "meta.json"
+            if not meta_file.exists():
+                continue
+            try:
+                with open(meta_file) as f:
+                    meta = json.load(f)
+                root_dir = meta.get("root_dir")
+                indexed_at = float(meta.get("indexed_at", 0.0))
+                if root_dir:
+                    candidates.append((indexed_at, root_dir))
+            except Exception:
+                continue
+
+        if not candidates:
+            return None
+
+        candidates.sort(key=lambda x: (x[0], x[1]), reverse=True)
+        return candidates[0][1]
 
     def index_directory(self, root_dir: str) -> dict:
         """Walk, chunk, embed, and persist the codebase index."""
-        root = os.path.realpath(root_dir)
-        if not os.path.isdir(root):
-            raise ValueError(f"Not a directory: {root}")
+        with self._lock:
+            root = os.path.realpath(root_dir)
+            if not os.path.isdir(root):
+                raise ValueError(f"Not a directory: {root}")
 
-        chunks = walk_and_chunk(root)
-        if not chunks:
-            raise ValueError("No source files found to index")
+            chunks = walk_and_chunk(root)
+            if not chunks:
+                raise ValueError("No source files found to index")
 
-        idx_dir = self._get_index_dir(root)
-        idx_dir.mkdir(parents=True, exist_ok=True)
+            idx_dir = self._get_index_dir(root)
+            idx_dir.mkdir(parents=True, exist_ok=True)
 
-        # Save chunks
-        chunk_dicts = [c.to_dict() for c in chunks]
-        with open(idx_dir / "chunks.json", "w") as f:
-            json.dump(chunk_dicts, f)
+            # Save chunks
+            chunk_dicts = [c.to_dict() for c in chunks]
+            with open(idx_dir / "chunks.json", "w") as f:
+                json.dump(chunk_dicts, f)
 
-        # Compute and save embeddings
-        texts = [c.content for c in chunks]
-        embeddings = None
-        try:
-            from app.rag.embeddings import embedder
-            if embedder.available:
-                embeddings = embedder.embed(texts)
-                np.save(str(idx_dir / "embeddings.npy"), embeddings)
-                logger.info("Computed %d embeddings", len(texts))
-        except Exception as e:
-            logger.warning("Embedding failed (search will use keyword-only): %s", e)
+            # Compute and save embeddings
+            texts = [c.content for c in chunks]
+            embeddings = None
+            try:
+                from app.rag.embeddings import embedder
+                if embedder.available:
+                    embeddings = embedder.embed(texts)
+                    np.save(str(idx_dir / "embeddings.npy"), embeddings)
+                    logger.info("Computed %d embeddings", len(texts))
+            except Exception as e:
+                logger.warning("Embedding failed (search will use keyword-only): %s", e)
 
-        # Count unique files
-        unique_files = len(set(c.file_path for c in chunks))
+            # Count unique files
+            unique_files = len(set(c.file_path for c in chunks))
 
-        # Save metadata
-        meta = {
-            "root_dir": root,
-            "file_count": unique_files,
-            "chunk_count": len(chunks),
-            "indexed_at": time.time(),
-        }
-        with open(idx_dir / "meta.json", "w") as f:
-            json.dump(meta, f)
+            # Save metadata
+            meta = {
+                "root_dir": root,
+                "file_count": unique_files,
+                "chunk_count": len(chunks),
+                "indexed_at": time.time(),
+            }
+            with open(idx_dir / "meta.json", "w") as f:
+                json.dump(meta, f)
 
-        # Update in-memory state
-        self._chunks = chunk_dicts
-        self._embeddings = embeddings
-        self._meta = meta
-        self._index_dir = idx_dir
+            # Update in-memory state
+            self._chunks = chunk_dicts
+            self._embeddings = embeddings
+            self._meta = meta
+            self._index_dir = idx_dir
 
-        return {
-            "status": "indexed",
-            "directory": root,
-            "file_count": unique_files,
-            "chunk_count": len(chunks),
-        }
+            return {
+                "status": "indexed",
+                "directory": root,
+                "file_count": unique_files,
+                "chunk_count": len(chunks),
+            }
 
     def search(self, query: str, top_k: int = 10) -> List[SearchResult]:
         """Hybrid BM25 + vector search over the indexed codebase."""
-        if not self._ensure_loaded():
-            return []
+        with self._lock:
+            if not self._ensure_loaded():
+                return []
 
-        chunks = self._chunks
-        if not chunks:
-            return []
+            chunks = self._chunks
+            if not chunks:
+                return []
 
-        texts = [c["content"] for c in chunks]
+            texts = [c["content"] for c in chunks]
 
-        bm25_results = self._bm25_search(texts, query, n=20)
-        vector_results = self._vector_search(texts, query, n=20)
+            bm25_results = self._bm25_search(texts, query, n=20)
+            vector_results = self._vector_search(texts, query, n=20)
 
-        if bm25_results and vector_results:
-            fused = self._reciprocal_rank_fusion(bm25_results, vector_results)
-        elif vector_results:
-            fused = vector_results
-        else:
-            fused = bm25_results
+            if bm25_results and vector_results:
+                fused = self._reciprocal_rank_fusion(bm25_results, vector_results)
+            elif vector_results:
+                fused = vector_results
+            else:
+                fused = bm25_results
 
-        results: List[SearchResult] = []
-        for item in fused[:top_k]:
-            idx = item["index"]
-            c = chunks[idx]
-            results.append(SearchResult(
-                file_path=c["file_path"],
-                start_line=c["start_line"],
-                end_line=c["end_line"],
-                symbol=c["symbol"],
-                kind=c["kind"],
-                content=c["content"],
-                score=item["score"],
-                method=item["method"],
-            ))
+            results: List[SearchResult] = []
+            for item in fused[:top_k]:
+                idx = item["index"]
+                c = chunks[idx]
+                results.append(SearchResult(
+                    file_path=c["file_path"],
+                    start_line=c["start_line"],
+                    end_line=c["end_line"],
+                    symbol=c["symbol"],
+                    kind=c["kind"],
+                    content=c["content"],
+                    score=item["score"],
+                    method=item["method"],
+                ))
 
-        return results
+            return results
 
     def get_status(self) -> dict:
         """Return current index status."""
-        if self._ensure_loaded():
-            return {
-                "indexed": True,
-                "directory": self._meta.get("root_dir", ""),
-                "file_count": self._meta.get("file_count", 0),
-                "chunk_count": self._meta.get("chunk_count", 0),
-                "indexed_at": self._meta.get("indexed_at"),
-                "has_embeddings": self._embeddings is not None,
-            }
-        return {"indexed": False}
+        with self._lock:
+            if self._ensure_loaded():
+                return {
+                    "indexed": True,
+                    "directory": self._meta.get("root_dir", ""),
+                    "file_count": self._meta.get("file_count", 0),
+                    "chunk_count": self._meta.get("chunk_count", 0),
+                    "indexed_at": self._meta.get("indexed_at"),
+                    "has_embeddings": self._embeddings is not None,
+                }
+            return {"indexed": False}
 
     def delete_index(self) -> bool:
         """Delete the current index from disk and memory."""
-        if self._index_dir and self._index_dir.exists():
-            shutil.rmtree(self._index_dir)
-        self._chunks = None
-        self._embeddings = None
-        self._meta = None
-        self._index_dir = None
-        return True
+        with self._lock:
+            if self._index_dir and self._index_dir.exists():
+                shutil.rmtree(self._index_dir)
+            self._chunks = None
+            self._embeddings = None
+            self._meta = None
+            self._index_dir = None
+            return True
 
     # ── BM25 search ──────────────────────────────────────────
 

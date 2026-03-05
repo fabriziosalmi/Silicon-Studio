@@ -3,7 +3,9 @@
 import logging
 from fastapi import APIRouter, HTTPException
 from pydantic import BaseModel, Field
-from typing import Optional
+from starlette.concurrency import run_in_threadpool
+
+from app.security import safe_user_file
 
 logger = logging.getLogger(__name__)
 router = APIRouter()
@@ -23,13 +25,14 @@ async def index_directory(req: IndexRequest):
     """Index a local directory for semantic code search."""
     from app.codebase.service import codebase_service
     try:
-        result = codebase_service.index_directory(req.directory)
+        safe_dir = str(safe_user_file(req.directory))
+        result = await run_in_threadpool(codebase_service.index_directory, safe_dir)
         return result
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         logger.error("Indexing failed: %s", e, exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Indexing failed: {e}")
+        raise HTTPException(status_code=500, detail="Indexing failed")
 
 
 @router.post("/search")

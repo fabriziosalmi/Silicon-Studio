@@ -20,7 +20,7 @@ npm install
 cd backend
 python -m venv .venv
 source .venv/bin/activate
-pip install -e ".[dev]"
+pip install -c constraints.txt -e ".[dev]"
 cd ..
 ```
 

@@ -2,8 +2,9 @@ VENV   := backend/.venv
 PYTHON := $(VENV)/bin/python
 PIP    := $(VENV)/bin/pip
 DEPS   := $(VENV)/.deps
+CONSTRAINTS := backend/constraints.txt
 
-.PHONY: setup run test clean
+.PHONY: setup run test hooks clean
 
 # ── Setup ────────────────────────────────────────────────
 # Creates the venv, installs Python + JS deps.
@@ -11,9 +12,9 @@ DEPS   := $(VENV)/.deps
 
 setup: $(DEPS) node_modules
 
-$(DEPS): backend/pyproject.toml
+$(DEPS): backend/pyproject.toml $(CONSTRAINTS)
 	python3 -m venv $(VENV)
-	$(PIP) install -e "backend/.[dev]"
+	$(PIP) install -c $(CONSTRAINTS) -e "backend/.[dev]"
 	@touch $@
 
 node_modules: package.json
@@ -29,7 +30,11 @@ run: $(DEPS) node_modules
 # ── Test ─────────────────────────────────────────────────
 
 test: $(DEPS)
-	$(PYTHON) -m pytest backend/tests/ -v --ignore=backend/tests/test_shield.py
+	$(PYTHON) backend/scripts/check_constraints_sync.py
+	$(PYTHON) backend/scripts/run_pytest_clean.py
+
+hooks:
+	bash scripts/install_git_hooks.sh
 
 # ── Clean ────────────────────────────────────────────────
 

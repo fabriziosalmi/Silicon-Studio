@@ -75,6 +75,11 @@ def chunk_python_file(file_path: str, source: str) -> List[Chunk]:
         # Fall back to generic chunking if file has syntax errors
         return chunk_generic_file(file_path, source)
 
+    parent_map: dict[ast.AST, ast.AST] = {}
+    for parent in ast.walk(tree):
+        for child in ast.iter_child_nodes(parent):
+            parent_map[child] = parent
+
     for node in ast.walk(tree):
         if isinstance(node, ast.ClassDef):
             start = node.lineno
@@ -104,22 +109,23 @@ def chunk_python_file(file_path: str, source: str) -> List[Chunk]:
                     ))
 
         elif isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
-            # Skip methods (already handled above)
-            for parent in ast.walk(tree):
-                if isinstance(parent, ast.ClassDef) and node in ast.iter_child_nodes(parent):
-                    break
-            else:
-                start = node.lineno
-                end = node.end_lineno or start
-                body = "".join(lines[start - 1 : end])
-                chunks.append(Chunk(
-                    file_path=file_path,
-                    start_line=start,
-                    end_line=end,
-                    symbol=node.name,
-                    kind="function",
-                    content=body,
-                ))
+            parent = parent_map.get(node)
+            if isinstance(parent, ast.ClassDef):
+                continue
+            if not isinstance(parent, ast.Module):
+                continue
+
+            start = node.lineno
+            end = node.end_lineno or start
+            body = "".join(lines[start - 1 : end])
+            chunks.append(Chunk(
+                file_path=file_path,
+                start_line=start,
+                end_line=end,
+                symbol=node.name,
+                kind="function",
+                content=body,
+            ))
 
     # If we got nothing useful (e.g. just assignments/imports), chunk the whole file
     if not chunks:
@@ -188,21 +194,25 @@ def walk_and_chunk(root_dir: str) -> List[Chunk]:
 
         for fname in filenames:
             fpath = Path(dirpath) / fname
-            if fpath.suffix.lower() not in TEXT_EXTENSIONS:
-                continue
-            if fpath.stat().st_size > MAX_FILE_BYTES:
-                continue
-            if _is_binary(fpath):
-                continue
+            try:
+                if fpath.suffix.lower() not in TEXT_EXTENSIONS:
+                    continue
+                if fpath.stat().st_size > MAX_FILE_BYTES:
+                    continue
+                if _is_binary(fpath):
+                    continue
 
-            # Use relative path from root for readability
-            rel_path = str(fpath.relative_to(root))
-            chunks = chunk_file(fpath)
-            # Rewrite file_path to relative
-            for c in chunks:
-                c.file_path = rel_path
-            all_chunks.extend(chunks)
-            file_count += 1
+                # Use relative path from root for readability
+                rel_path = str(fpath.relative_to(root))
+                chunks = chunk_file(fpath)
+                # Rewrite file_path to relative
+                for c in chunks:
+                    c.file_path = rel_path
+                all_chunks.extend(chunks)
+                file_count += 1
+            except Exception as e:
+                logger.warning("Skipping file %s: %s", fpath, e)
+                continue
 
     logger.info("Chunked %d files into %d chunks from %s", file_count, len(all_chunks), root)
     return all_chunks

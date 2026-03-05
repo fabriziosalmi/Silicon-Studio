@@ -113,6 +113,27 @@ def test_preview_limit_validation():
     assert response.status_code == 422  # Pydantic validation
 
 
+def test_codebase_index_rejects_outside_home_path():
+    response = client.post("/api/codebase/index", json={"directory": "/etc"})
+    assert response.status_code == 400
+
+
+def test_codebase_index_hides_internal_exception(monkeypatch):
+    from pathlib import Path
+    from app.codebase import service as codebase_service_module
+
+    def _boom(_directory):
+        raise RuntimeError("secret-stacktrace-marker")
+
+    monkeypatch.setattr(codebase_service_module.codebase_service, "index_directory", _boom)
+
+    response = client.post("/api/codebase/index", json={"directory": str(Path.home())})
+    assert response.status_code == 500
+    body = response.json()
+    assert body["detail"] == "Indexing failed"
+    assert "secret-stacktrace-marker" not in str(body)
+
+
 def test_finetune_parameter_validation():
     """Finetune endpoint should validate parameter ranges."""
     response = client.post("/api/engine/finetune", json={

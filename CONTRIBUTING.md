@@ -37,9 +37,15 @@ backend/
 
 ```bash
 make setup   # creates venv, installs Python + JS deps
+make hooks   # installs local pre-commit hook (.githooks/pre-commit)
 make run     # starts backend + frontend
-make test    # runs pytest
+make test    # runs dependency sync check + warning-clean pytest
 ```
+
+The pre-commit hook blocks commits when:
+- `backend/pyproject.toml` and `backend/constraints.txt` are out of sync
+- backend tests fail
+- backend tests emit warnings (warnings must be fixed or explicitly filtered)
 
 ## How to Add a New Tab
 
