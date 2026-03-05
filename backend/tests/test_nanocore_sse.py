@@ -32,7 +32,7 @@ async def test_sse_stream_emits_session_start():
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         with patch("app.agents.nanocore.supervisor.SupervisorAgent.run") as mock_run:
             # Yield a minimal event sequence
-            async def fake_run(prompt):
+            async def fake_run(prompt, **kwargs):
                 yield {"event": "session_start", "data": {"session_id": "test-123"}}
                 yield {"event": "done", "data": {"summary": "ok", "total_tokens": 0, "total_time_ms": 10}}
 
@@ -60,7 +60,7 @@ async def test_sse_stream_ends_with_done():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         with patch("app.agents.nanocore.supervisor.SupervisorAgent.run") as mock_run:
-            async def fake_run(prompt):
+            async def fake_run(prompt, **kwargs):
                 yield {"event": "session_start", "data": {"session_id": "test-456"}}
                 yield {"event": "token_stream", "data": {"agent": "supervisor", "text": "Hello!"}}
                 yield {"event": "done", "data": {"summary": "ok", "total_tokens": 10, "total_time_ms": 100}}
@@ -83,7 +83,7 @@ async def test_sse_tool_event_sequence():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         with patch("app.agents.nanocore.supervisor.SupervisorAgent.run") as mock_run:
-            async def fake_run(prompt):
+            async def fake_run(prompt, **kwargs):
                 yield {"event": "session_start", "data": {"session_id": "tool-test"}}
                 yield {"event": "tool_start", "data": {"tool": "run_bash", "args": {"command": "echo hi"}, "call_id": "c1"}}
                 yield {"event": "tool_log", "data": {"call_id": "c1", "stream": "stdout", "text": "hi\n"}}
@@ -107,7 +107,7 @@ async def test_sse_diff_proposal_event():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         with patch("app.agents.nanocore.supervisor.SupervisorAgent.run") as mock_run:
-            async def fake_run(prompt):
+            async def fake_run(prompt, **kwargs):
                 yield {"event": "session_start", "data": {"session_id": "diff-test"}}
                 yield {"event": "diff_proposal", "data": {
                     "call_id": "d1",
@@ -138,7 +138,7 @@ async def test_sse_error_in_stream():
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
         with patch("app.agents.nanocore.supervisor.SupervisorAgent.run") as mock_run:
-            async def fake_run(prompt):
+            async def fake_run(prompt, **kwargs):
                 yield {"event": "session_start", "data": {"session_id": "err-test"}}
                 raise RuntimeError("model crashed")
 
