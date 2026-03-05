@@ -67,7 +67,10 @@ export function GlobalStateProvider({ children }: { children: React.ReactNode })
     // Wrap setActiveModel so external callers (TopBar) also sync the polling ref,
     // preventing the next poll from overwriting a valid model with null.
     const setActiveModel = React.useCallback((model: LoadedModel | null) => {
+        const prev = lastActiveModelId.current;
         lastActiveModelId.current = model?.id ?? null;
+        if (model && !prev) console.info('[GlobalState] Model loaded:', model.name);
+        if (!model && prev) console.info('[GlobalState] Model unloaded');
         _setActiveModel(model);
     }, []);
 

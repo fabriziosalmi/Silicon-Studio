@@ -5,6 +5,7 @@ from typing import Dict, Any, List, Optional, Union
 import uuid
 import json
 import logging
+import time
 from pathlib import Path
 from app.engine.service import MLXEngineService
 from app.security import safe_user_file
@@ -139,8 +140,11 @@ class LoadModelRequest(BaseModel):
 async def load_model(request: LoadModelRequest):
     """Load a model into active memory (Apple Silicon unified memory)."""
     try:
+        t0 = time.time()
+        logger.info(f"Model load started: {request.model_id}")
         await service.load_active_model(request.model_id)
         metadata = service.get_active_model_metadata()
+        logger.info(f"Model loaded in {time.time() - t0:.1f}s: {request.model_id}")
         return {"status": "loaded", "model_id": request.model_id, **metadata}
     except MemoryError as e:
         raise HTTPException(status_code=400, detail=str(e))
@@ -200,6 +204,8 @@ async def chat_generation(request: ChatRequest):
     params = request.model_dump()
     model_id = params.pop("model_id")
     messages = params.pop("messages")
+    logger.info(f"Generation started: model={model_id}, messages={len(messages)}")
+    t0 = time.time()
 
     async def event_generator():
         try:
@@ -207,6 +213,7 @@ async def chat_generation(request: ChatRequest):
                 yield f"data: {json.dumps(chunk)}\n\n"
         except Exception as e:
             yield f"data: {json.dumps({'error': str(e)})}\n\n"
+        logger.info(f"Generation complete in {time.time() - t0:.1f}s: model={model_id}")
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
