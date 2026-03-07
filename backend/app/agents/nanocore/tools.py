@@ -7,6 +7,7 @@ import logging
 import os
 import pty
 import re
+import sys
 import tempfile
 from pathlib import Path
 from typing import AsyncGenerator
@@ -678,10 +679,6 @@ async def execute_python_script(script_code: str, timeout: int = 15, air_gapped:
     since true air-gapping requires OS-level namespaces or sandboxing not uniformly available on macOS, 
     but we will drop standard proxy/network env vars just in case).
     """
-    import tempfile
-    import os
-    import sys
-    
     # Strip dangerous imports if air_gapped is strict (Best effort for this quick win)
     if air_gapped:
         blocked_imports = ["urllib", "requests", "http.client", "socket", "ftplib", "aiohttp", "httpx"]

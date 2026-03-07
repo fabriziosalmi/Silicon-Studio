@@ -3,6 +3,7 @@ from mlx_lm.tuner import train, TrainingArgs
 from mlx_lm.utils import load_adapters
 import mlx.core as mx
 import gc
+import re
 import asyncio
 import threading
 import os
@@ -483,6 +484,14 @@ class MLXEngineService:
         # Pre-load validation
         self._load_warning = None
         load_path = Path(path_to_load)
+
+        # Fail early if local path doesn't exist (instead of cryptic HF repo ID error)
+        if load_path.is_absolute() and not load_path.exists():
+            raise FileNotFoundError(
+                f"Model directory not found: {path_to_load}. "
+                f"It may have been moved or deleted."
+            )
+
         if load_path.is_absolute() and load_path.is_dir():
             # Check config.json exists
             if not (load_path / "config.json").exists():
@@ -617,7 +626,6 @@ class MLXEngineService:
                 cw_str = m.get("context_window", "Unknown")
                 cw_num = None
                 if cw_str and cw_str != "Unknown":
-                    import re
                     match = re.match(r"^(\d+)k$", cw_str, re.IGNORECASE)
                     if match:
                         cw_num = int(match.group(1)) * 1024
@@ -704,7 +712,6 @@ class MLXEngineService:
     def _save_base64_image(data_url: str) -> str | None:
         """Decode a data: URL to a temp file, return the file path."""
         import base64
-        import tempfile
         try:
             header, b64data = data_url.split(",", 1)
             # Extract extension from mime type: "data:image/png;base64" → "png"
@@ -954,8 +961,7 @@ class MLXEngineService:
                         if m["id"] == model_id:
                             cw = m.get("context_window", "")
                             if cw and cw != "Unknown":
-                                import re as _re
-                                match = _re.match(r"^(\d+)k$", str(cw), _re.IGNORECASE)
+                                match = re.match(r"^(\d+)k$", str(cw), re.IGNORECASE)
                                 if match:
                                     max_ctx = int(match.group(1)) * 1024
                                 else:

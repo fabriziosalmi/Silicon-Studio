@@ -441,12 +441,9 @@ class SupervisorAgent:
         system_prompt_content = system_content.strip()
         
         if not self.enable_python_sandbox:
-            # Strip execute_python_script block roughly
-            import re
             system_prompt_content = re.sub(r'### execute_python_script.*?(?=###|$)', '', system_prompt_content, flags=re.DOTALL)
-            
+
         if not self.enable_moa:
-            import re
             system_prompt_content = re.sub(r'### ask_swarm_experts.*?(?=###|$)', '', system_prompt_content, flags=re.DOTALL)
             
         messages.insert(0, {"role": "system", "content": system_prompt_content})
