@@ -147,7 +147,9 @@ function App() {
     <div className="h-screen w-screen flex flex-col bg-transparent">
 
       {/* Modern Top Status Bar */}
-      <TopBar />
+      <header className="glass-header z-50">
+        <TopBar />
+      </header>
 
       {updateReady && (
         <div className="flex items-center justify-between px-4 py-2 bg-blue-600/20 border-b border-blue-500/30 text-sm text-blue-300">
@@ -162,10 +164,10 @@ function App() {
       )}
 
       {/* Main Content Area */}
-      <div className="flex-1 flex overflow-hidden rounded-bl-lg rounded-br-lg border-t border-white/10 bg-[rgba(20,20,20,0.7)]">
+      <div className="flex-1 flex overflow-hidden rounded-bl-lg rounded-br-lg border-t premium-border bg-[rgba(20,20,20,0.7)]">
 
         {/* Sidebar */}
-        <div className={`${sidebarCollapsed ? 'w-14' : 'w-64'} bg-black/40 flex flex-col pt-6 border-r border-white/5 relative z-20 rounded-bl-lg transition-all duration-200 overflow-hidden`}>
+        <div className={`${sidebarCollapsed ? 'w-14' : 'w-64'} glass-sidebar flex flex-col pt-6 border-r premium-border relative z-20 rounded-bl-lg transition-all duration-200 overflow-hidden`}>
 
           <nav className={`flex-1 flex flex-col min-h-0 overflow-y-auto space-y-6 ${sidebarCollapsed ? 'px-1.5' : 'px-4'} transition-all duration-200`}>
 
@@ -180,41 +182,41 @@ function App() {
                   collapsed={sidebarCollapsed}
                 />
                 <div>
-                    <SidebarItem
-                      label="Chat"
-                      active={activeTab === 'chat'}
-                      onClick={() => { setActiveTab('chat'); if (!historyExpanded) { setHistoryExpanded(true); conversations.fetchConversations(); } }}
-                      icon={<MessageSquare size={18} />}
-                      collapsed={sidebarCollapsed}
-                      suffix={activeTab === 'chat' ? (
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setChatSearchOpen(!chatSearchOpen); if (!chatSearchOpen && !historyExpanded) { setHistoryExpanded(true); conversations.fetchConversations(); } }}
-                            className={`p-1 rounded transition-colors ${chatSearchOpen ? 'text-blue-400 bg-blue-500/10' : 'text-gray-500 hover:text-white hover:bg-white/10'}`}
-                            title="Search conversations"
-                          >
-                            <Search size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); conversations.setActiveConversationId(null); }}
-                            className="p-1 text-gray-500 hover:text-white hover:bg-white/10 rounded transition-colors"
-                            title="New conversation"
-                          >
-                            <Plus size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setHistoryExpanded(!historyExpanded); if (!historyExpanded) conversations.fetchConversations(); }}
-                            className="p-1 text-gray-500 hover:text-white hover:bg-white/10 rounded transition-colors"
-                            title={historyExpanded ? 'Hide history' : 'Show history'}
-                          >
-                            {historyExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                          </button>
-                        </div>
-                      ) : undefined}
-                    />
+                  <SidebarItem
+                    label="Chat"
+                    active={activeTab === 'chat'}
+                    onClick={() => { setActiveTab('chat'); if (!historyExpanded) { setHistoryExpanded(true); conversations.fetchConversations(); } }}
+                    icon={<MessageSquare size={18} />}
+                    collapsed={sidebarCollapsed}
+                    suffix={activeTab === 'chat' ? (
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setChatSearchOpen(!chatSearchOpen); if (!chatSearchOpen && !historyExpanded) { setHistoryExpanded(true); conversations.fetchConversations(); } }}
+                          className={`p-1 rounded transition-colors ${chatSearchOpen ? 'text-blue-400 bg-blue-500/10' : 'text-gray-500 hover:text-white hover:bg-white/10'}`}
+                          title="Search conversations"
+                        >
+                          <Search size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); conversations.setActiveConversationId(null); }}
+                          className="p-1 text-gray-500 hover:text-white hover:bg-white/10 rounded transition-colors"
+                          title="New conversation"
+                        >
+                          <Plus size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setHistoryExpanded(!historyExpanded); if (!historyExpanded) conversations.fetchConversations(); }}
+                          className="p-1 text-gray-500 hover:text-white hover:bg-white/10 rounded transition-colors"
+                          title={historyExpanded ? 'Hide history' : 'Show history'}
+                        >
+                          {historyExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </button>
+                      </div>
+                    ) : undefined}
+                  />
                   {/* Conversation history list — collapsible under Chat */}
                   {!sidebarCollapsed && activeTab === 'chat' && historyExpanded && (
                     <div className="ml-2 mt-1 border-l border-white/5 pl-2">
@@ -254,33 +256,33 @@ function App() {
                   collapsed={sidebarCollapsed}
                 />
                 <div>
-                    <SidebarItem
-                      label="Notes"
-                      active={activeTab === 'workspace'}
-                      onClick={() => { setActiveTab('workspace'); if (!notesExpanded) { setNotesExpanded(true); notes.fetchNotes(); } }}
-                      icon={<FileText size={18} />}
-                      collapsed={sidebarCollapsed}
-                      suffix={activeTab === 'workspace' ? (
-                        <div className="flex items-center gap-0.5 shrink-0">
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); notes.setActiveNoteId(null); }}
-                            className="p-1 text-gray-500 hover:text-white hover:bg-white/10 rounded transition-colors"
-                            title="New note"
-                          >
-                            <Plus size={14} />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={(e) => { e.stopPropagation(); setNotesExpanded(!notesExpanded); if (!notesExpanded) notes.fetchNotes(); }}
-                            className="p-1 text-gray-500 hover:text-white hover:bg-white/10 rounded transition-colors"
-                            title={notesExpanded ? 'Hide notes' : 'Show notes'}
-                          >
-                            {notesExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
-                          </button>
-                        </div>
-                      ) : undefined}
-                    />
+                  <SidebarItem
+                    label="Notes"
+                    active={activeTab === 'workspace'}
+                    onClick={() => { setActiveTab('workspace'); if (!notesExpanded) { setNotesExpanded(true); notes.fetchNotes(); } }}
+                    icon={<FileText size={18} />}
+                    collapsed={sidebarCollapsed}
+                    suffix={activeTab === 'workspace' ? (
+                      <div className="flex items-center gap-0.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); notes.setActiveNoteId(null); }}
+                          className="p-1 text-gray-500 hover:text-white hover:bg-white/10 rounded transition-colors"
+                          title="New note"
+                        >
+                          <Plus size={14} />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={(e) => { e.stopPropagation(); setNotesExpanded(!notesExpanded); if (!notesExpanded) notes.fetchNotes(); }}
+                          className="p-1 text-gray-500 hover:text-white hover:bg-white/10 rounded transition-colors"
+                          title={notesExpanded ? 'Hide notes' : 'Show notes'}
+                        >
+                          {notesExpanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        </button>
+                      </div>
+                    ) : undefined}
+                  />
                   {!sidebarCollapsed && activeTab === 'workspace' && notesExpanded && (
                     <div className="ml-2 mt-1 border-l border-white/5 pl-2">
                       <NoteListPanel

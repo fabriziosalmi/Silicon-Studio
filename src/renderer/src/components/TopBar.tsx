@@ -94,7 +94,7 @@ export function TopBar() {
     }, [showModelMenu]);
 
     return (
-        <div className="h-10 w-full drag-region bg-[#18181B]/90 backdrop-blur-xl border-b border-white/5 flex items-center justify-between px-4 z-50">
+        <div className="h-10 w-full drag-region flex items-center justify-between px-4 border-b premium-border">
 
             {/* Left: Window Title Placeholder */}
             <div className="flex items-center space-x-2 pl-[80px]">
@@ -163,11 +163,10 @@ export function TopBar() {
                                         key={m.id}
                                         onClick={() => handleLoadModel(m)}
                                         disabled={loadingModelId === m.id || activeModel?.id === m.id}
-                                        className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${
-                                            activeModel?.id === m.id
+                                        className={`w-full flex items-center gap-2 px-3 py-2 text-left transition-colors ${activeModel?.id === m.id
                                                 ? 'bg-blue-500/10 text-blue-300'
                                                 : 'text-gray-300 hover:bg-white/5'
-                                        } disabled:opacity-60`}
+                                            } disabled:opacity-60`}
                                     >
                                         {loadingModelId === m.id ? (
                                             <Loader2 size={12} className="animate-spin text-blue-400 shrink-0" />

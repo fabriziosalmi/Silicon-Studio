@@ -570,7 +570,34 @@ class MLXEngineService:
                     f"System may be slow due to swapping."
                 )
                 logger.warning(self._load_warning)
-        except Exception as e:
+        except (MemoryError, Exception) as e:
+            if isinstance(e, MemoryError):
+                logger.warning(f"OOM detected during load of {model_id}. Unloading everything and retrying...")
+                self.active_model = None
+                self.active_tokenizer = None
+                self.active_processor = None
+                self.active_model_id = None
+                gc.collect()
+                mx.metal.clear_cache()
+                
+                # One-time retry after cleanup
+                try:
+                    if is_vision:
+                        model, processor = await loop.run_in_executor(None, vlm_load, path_to_load)
+                        self.active_model = model
+                        self.active_processor = processor
+                        self.active_is_vision = True
+                    else:
+                        model, tokenizer = await loop.run_in_executor(None, load, path_to_load)
+                        self.active_model = model
+                        self.active_tokenizer = tokenizer
+                        self.active_is_vision = False
+                    self.active_model_id = model_id
+                    return
+                except Exception as retry_e:
+                    logger.error(f"OOM Retry failed for {model_id}: {retry_e}")
+                    raise retry_e
+
             # Reset state so we don't appear to have a loaded model
             self.active_model_id = None
             self.active_model = None
@@ -1020,6 +1047,11 @@ class MLXEngineService:
                             pass  # generator still running in executor thread
 
                 yield {"text": "", "done": True}
+                
+                # Phase 9: Dynamic KV-Cache Cleansing
+                # After generation, we ensure VRAM is released and GC is triggered.
+                gc.collect()
+                mx.metal.clear_cache()
 
             except Exception as e:
                 logger.error(f"Streaming error: {e}")

@@ -121,7 +121,31 @@
       "Bash(python -c \"import ast; ast.parse\\(open\\(''backend/app/agents/nanocore/prompts.py''\\).read\\(\\)\\); print\\(''prompts.py OK''\\)\")",
       "Bash(python -c \"import ast; ast.parse\\(open\\(''backend/app/agents/nanocore/supervisor.py''\\).read\\(\\)\\); ast.parse\\(open\\(''backend/app/agents/nanocore/prompts.py''\\).read\\(\\)\\); ast.parse\\(open\\(''backend/app/api/terminal.py''\\).read\\(\\)\\); print\\(''OK''\\)\")",
       "Bash(python -c \"import ast; ast.parse\\(open\\(''backend/app/agents/nanocore/supervisor.py''\\).read\\(\\)\\); ast.parse\\(open\\(''backend/app/agents/nanocore/context.py''\\).read\\(\\)\\); print\\(''Python OK''\\)\")",
-      "Bash(python -c \"import ast; ast.parse\\(open\\(''backend/app/agents/nanocore/supervisor.py''\\).read\\(\\)\\); print\\(''OK''\\)\")"
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''backend/app/agents/nanocore/supervisor.py''\\).read\\(\\)\\); print\\(''OK''\\)\")",
+      "Bash(npx playwright test e2e/coder-agent.spec.ts --reporter=line)",
+      "Bash(npx playwright test chat.spec.ts --reporter=line --list)",
+      "Bash(npx playwright test coder-agent.spec.ts --reporter=line --list)",
+      "Bash(npx playwright test coder-agent.spec.ts --reporter=line)",
+      "Bash(npx playwright test coder-agent.spec.ts -g \"agent panel shows header\" --reporter=line)",
+      "Bash(git -C /Users/fab/Documents/git/Silicon-Studio diff src/renderer/e2e/)",
+      "Bash(git -C /Users/fab/Documents/git/Silicon-Studio diff src/renderer/playwright.config.ts)",
+      "Bash(git -C /Users/fab/Documents/git/Silicon-Studio status --short)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''backend/app/agents/nanocore/supervisor.py''\\).read\\(\\)\\); print\\(''supervisor OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''backend/app/agents/nanocore/validators.py''\\).read\\(\\)\\); print\\(''validators OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''backend/app/agents/nanocore/tools.py''\\).read\\(\\)\\); print\\(''tools OK''\\)\")",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''backend/app/agents/nanocore/prompts.py''\\).read\\(\\)\\); print\\(''prompts OK''\\)\")",
+      "Bash(npx playwright test chat.spec.ts terminal.spec.ts --reporter=line)",
+      "Bash(python -c \"import ast; ast.parse\\(open\\(''backend/app/agents/nanocore/repomap.py''\\).read\\(\\)\\); print\\(''repomap OK''\\)\")",
+      "Bash(npx playwright test e2e/app-shell.spec.ts e2e/models.spec.ts e2e/settings.spec.ts e2e/workflows.spec.ts --reporter=line)",
+      "Bash(.venv/bin/python -c \"from app.api.monitor import router; print\\(''monitor OK''\\)\")",
+      "Bash(.venv/bin/python -c \"import mlx_lm; print\\(mlx_lm.__version__\\)\")",
+      "Bash(.venv/bin/python3 -c \":*)",
+      "Bash(.venv/bin/python3 -c \"from app.api.terminal import router; from app.agents.nanocore.supervisor import SupervisorAgent; print\\(''OK''\\)\")",
+      "Bash(.venv/bin/python3 -c \"import ast; ast.parse\\(open\\(''main.py''\\).read\\(\\)\\); print\\(''main.py OK''\\)\")",
+      "Bash(.venv/bin/python3 -c \"import ast; ast.parse\\(open\\(''app/api/engine.py''\\).read\\(\\)\\); print\\(''engine.py OK''\\)\")",
+      "Bash(.venv/bin/python3 -c \"import ast; ast.parse\\(open\\(''app/api/terminal.py''\\).read\\(\\)\\); print\\(''terminal.py OK''\\)\")",
+      "Bash(npx playwright test e2e/terminal.spec.ts --reporter=list)",
+      "Bash(.venv/bin/python -m pytest tests/test_nanocore_sse.py -v)"
     ]
   }
 }

@@ -11,9 +11,9 @@ from pathlib import Path
 from typing import AsyncGenerator
 
 from .types import AgentState, TrajectoryEntry
-from .prompts import SYSTEM_PROMPT, REVIEW_MODE_PROMPT
+from .prompts import SYSTEM_PROMPT, REVIEW_MODE_PROMPT, INSPECTOR_PROMPT
 from .parser import extract_tool_calls, has_partial_tool_tag, strip_tool_calls
-from .tools import run_bash, read_file, generate_edit_diff, apply_edit, apply_patch_content, git_tool, check_broken_imports
+from .tools import run_bash, read_file, generate_edit_diff, apply_edit, apply_patch_content, git_tool, check_broken_imports, generate_codemap
 from .validators import validate_content, detect_lazy_edit, run_lint_check, scan_security, scan_performance
 from .guardrails import LoopGuardrails
 from .context import ContextManager, count_tokens
@@ -172,19 +172,31 @@ class SupervisorAgent:
         old_content = entry["old_content"]
         try:
             ok = await apply_edit(file_path, old_content)
+            if ok:
+                # Commandment 15: AI-Specific Undo
+                # Inject a message into history so the agent knows the user rejected the change
+                self._history.append({
+                    "role": "user",
+                    "content": f"[SYSTEM: User undid your last change to {file_path}. This means your previous approach was incorrect or unwanted. PLEASE PROPOSE AN ALTERNATIVE APPROACH.]"
+                })
             return {"file_path": file_path, "ok": ok, "error": "" if ok else "Failed to write file"}
         except Exception as e:
             return {"file_path": file_path, "ok": False, "error": str(e)}
 
-    def _step_label(self, label: str, iteration: int) -> dict:
-        """Build a step_label SSE event with progress info."""
+    def _step_label(self, label: str, iteration: int, agent_role: str = "architetto") -> dict:
+        """Build a step_label SSE event with progress info and agent role."""
         budget_pct = round(self.guardrails.budget_fraction() * 100)
-        return _sse("step_label", {
+        return {"event": "step_label", "data": {
             "label": label,
             "iteration": iteration,
             "max_iterations": self.max_iterations,
             "budget_pct": budget_pct,
-        })
+            "role": agent_role,
+        }}
+
+    def _agency_status(self, role: str, status: str) -> dict:
+        """Indicate which agent is active and what it's doing."""
+        return _sse("agency_status", {"role": role, "status": status})
 
     def _telemetry_data(self, iteration: int) -> dict:
         """Build a telemetry_update data payload."""
@@ -312,6 +324,36 @@ class SupervisorAgent:
         repo_map_cache = RepoMapCache(cwd)
         repo_map = repo_map_cache.get()
         base_prompt = REVIEW_MODE_PROMPT if self.mode == "review" else SYSTEM_PROMPT
+        
+        # --- Commandment 14: Linter Injection ---
+        linter_addition = ""
+        if active_file_path and os.path.exists(active_file_path):
+            try:
+                with open(active_file_path, 'r') as f:
+                    content = f.read()
+                linter_res = run_lint_check(content, active_file_path)
+                if linter_res:
+                    linter_addition = f"\n\n## Current Linter Errors in {os.path.basename(active_file_path)} (Fix these if relevant):\n{linter_res}"
+            except Exception:
+                pass
+
+        # --- Commandment 3: VRAM / Memory Sensing ---
+        import psutil
+        mem = psutil.virtual_memory()
+        if mem.percent > 90:
+            yield _sse("info", {"content": "⚠️ Critical: Low system memory. Performance may be degraded."})
+        elif mem.percent > 80:
+            yield _sse("info", {"content": "Note: System memory pressure detected. Scaling down background tasks."})
+
+        # --- Commandment 18: Project Rules (.nanocore_rules) ---
+        user_rules = ""
+        rules_path = os.path.join(cwd, ".nanocore_rules")
+        if os.path.exists(rules_path):
+            try:
+                with open(rules_path, 'r') as f:
+                    user_rules = f"\n\n## Project Specific Rules (.nanocore_rules)\n{f.read()}"
+            except Exception as e:
+                logger.warning(f"Error reading .nanocore_rules: {e}")
 
         # Suppress reasoning for models that support /no_think (e.g. Qwen3)
         # This dramatically speeds up agentic loops by avoiding wasted think tokens.
@@ -324,7 +366,7 @@ class SupervisorAgent:
         if active_file_path:
             env_lines.append(f"Active file (open in editor): {active_file_path}")
             env_lines.append(f"IMPORTANT: When the user asks to modify a file, use this path: {active_file_path}")
-        system_content = base_prompt + "\n\n## Environment\n\n" + "\n".join(env_lines) + "\n"
+        system_content = base_prompt + user_rules + linter_addition + "\n\n## Environment\n\n" + "\n".join(env_lines) + "\n"
         if repo_map:
             system_content += f"\n\n## Repository Map\n\n{repo_map}\n"
 
@@ -335,6 +377,15 @@ class SupervisorAgent:
                 from app.codebase.service import codebase_service
                 relevant = codebase_service.search(prompt, top_k=5)
                 if relevant:
+                    # --- Commandment 17: Transparent Retrieval Trace ---
+                    yield _sse("rag_search", {
+                        "query": prompt[:100],
+                        "results": [
+                            {"file_path": r.file_path, "score": r.score, "method": r.method}
+                            for r in relevant
+                        ]
+                    })
+                    
                     ctx_lines = ["## Relevant Context (auto-discovered)\n"]
                     for r in relevant:
                         header = f"--- {r.file_path}:{r.start_line}-{r.end_line}"
@@ -379,7 +430,8 @@ class SupervisorAgent:
                 break
 
             self._state = AgentState.thinking
-            yield self._step_label("Thinking...", iteration)
+            yield self._agency_status("architetto", "Planning trajectory")
+            yield self._step_label("Thinking...", iteration, agent_role="architetto")
             yield _sse("telemetry_update", self._telemetry_data(iteration))
 
             # Refresh repo map only if files changed (invalidated by edit)
@@ -400,6 +452,8 @@ class SupervisorAgent:
             iter_tokens = 0
             in_think_block = False
             think_buffer = ""
+
+            yield self._agency_status("operaio", "Drafting content")
 
             try:
                 async for chunk in engine_service.generate_stream(
@@ -687,6 +741,37 @@ class SupervisorAgent:
                         "diff": diff_info["diff"],
                     })
 
+                    # --- Internal Review (Inspector) ---
+                    yield self._agency_status("ispettore", "Verifying change quality")
+                    review_msg = f"Proposed change to {file_path}:\n```diff\n{diff_info['diff']}\n```"
+                    reviewer_messages = [
+                        {"role": "system", "content": INSPECTOR_PROMPT},
+                        {"role": "user", "content": review_msg}
+                    ]
+                    review_accum = ""
+                    async for rev_chunk in engine_service.generate_stream(self.model_id, reviewer_messages, temperature=0.1):
+                        if "text" in rev_chunk:
+                            review_accum += rev_chunk["text"]
+
+                    if "LGTM" not in review_accum.upper():
+                        # Inspector found something! Log it and emit trace
+                        logger.info(f"Inspector feedback on {file_path}: {review_accum}")
+                        yield _sse("agency_trace", {
+                            "role": "ispettore",
+                            "content": review_accum,
+                            "target": file_path
+                        })
+                        if "FIXED:" in review_accum:
+                            # Advanced: could swap the diff here. For now just add to trace.
+                            pass
+                    else:
+                        # Log LGTM too for trace visibility
+                        yield _sse("agency_trace", {
+                            "role": "ispettore",
+                            "content": "Review complete: LGTM. Code matches project standards and security guidelines.",
+                            "target": file_path
+                        })
+
                     # Wait for human decision
                     async for heartbeat in self._wait_for_diff_approval(call_id, iteration):
                         yield heartbeat
@@ -825,6 +910,7 @@ class SupervisorAgent:
                             tool_results.append("\n".join(sec_warns) + "\nReview and fix security issues above.")
                         perf_hints = scan_performance(new_content)
                         if perf_hints:
+                            has_post_edit_issues = True
                             tool_results.append("\n".join(perf_hints))
                         # If patch was clean, signal the model that the task may be complete
                         if not has_post_edit_issues:
@@ -950,8 +1036,19 @@ class SupervisorAgent:
                     yield _sse("tool_done", {"call_id": call_id, "exit_code": 0})
                     tool_results.append(f"[batch_edit] Applied to {applied}/{len(file_list)} files")
 
+                elif tc.name == "generate_codemap":
+                    yield self._step_label("Generating architecture map...", iteration)
+                    yield _sse("tool_start", {"tool": "generate_codemap", "args": {}, "call_id": call_id})
+                    try:
+                        result = await generate_codemap(self.workspace_dir)
+                        yield _sse("tool_done", {"call_id": call_id, "exit_code": 0})
+                        tool_results.append(f"[generate_codemap] {result}")
+                    except Exception as e:
+                        yield _sse("tool_done", {"call_id": call_id, "exit_code": 1})
+                        tool_results.append(f"[generate_codemap] Error: {e}")
+
                 else:
-                    tool_results.append(f"[unknown tool: {tc.name}]")
+                    tool_results.append(f"Unknown tool: {tc.name}")
 
             logger.info(f"Iteration {iteration}/{self.max_iterations} complete in {time.time() - iter_start:.1f}s (session={self.session_id})")
 

@@ -9,6 +9,7 @@ import json
 import re
 import asyncio
 import logging
+import importlib.util
 from pathlib import Path
 
 logger = logging.getLogger(__name__)
@@ -209,6 +210,47 @@ _PERF_PATTERNS: list[tuple[re.Pattern, str]] = [
 ]
 
 
+def scan_imports(content: str, file_path: str) -> list[str]:
+    """Scan Python content for potentially hallucinated imports."""
+    if not file_path.endswith(".py"):
+        return []
+
+    warnings = []
+    try:
+        tree = ast.parse(content)
+        for node in ast.walk(tree):
+            if isinstance(node, (ast.Import, ast.ImportFrom)):
+                # Handle 'import a.b' or 'from a import b'
+                module_name = ""
+                if isinstance(node, ast.Import):
+                    module_name = node.names[0].name.split('.')[0]
+                else:
+                    if node.module:
+                        module_name = node.module.split('.')[0]
+                
+                if not module_name:
+                    continue
+
+                # Ignore relative imports
+                if isinstance(node, ast.ImportFrom) and node.level > 0:
+                    continue
+
+                # Check if it's a local file in the same or sub directory
+                file_dir = Path(file_path).parent
+                if (file_dir / f"{module_name}.py").exists() or (file_dir / module_name).is_dir():
+                    continue
+                
+                # Check if it's in the standard library or installed
+                if importlib.util.find_spec(module_name) is None:
+                    # Ignore common but potentially missing libs that might be false positives
+                    if module_name not in ("typing_extensions", "pydantic_settings"):
+                        warnings.append(f"[hallucination] Potential non-existent library: '{module_name}'")
+    except Exception:
+        pass  # ast parse error handled by syntax validator
+    
+    return warnings
+
+
 def scan_security(content: str) -> list[str]:
     """Scan content for security anti-patterns. Returns list of warnings."""
     warnings = []
@@ -240,7 +282,15 @@ async def validate_content(file_path: str, content: str) -> str | None:
 
     sync_validator = _SYNC_VALIDATORS.get(ext)
     if sync_validator:
-        return sync_validator(content)
+        err = sync_validator(content)
+        if err:
+            return err
+        
+        # Post-syntax check: Hallucination scan for Python
+        if ext == ".py":
+            h_warns = scan_imports(content, file_path)
+            if h_warns:
+                return "\n".join(h_warns)
 
     async_validator = _ASYNC_VALIDATORS.get(ext)
     if async_validator:

@@ -70,28 +70,27 @@ export function AgentInputBar({ onSubmit, onStop, isRunning, disabled }: AgentIn
           disabled={disabled || isRunning}
           rows={1}
           style={{ WebkitAppRegion: 'no-drag', WebkitUserSelect: 'text' } as React.CSSProperties}
-          className="flex-1 resize-none bg-transparent text-sm text-white placeholder-gray-500 focus:outline-none disabled:opacity-50 select-text font-mono leading-relaxed"
+          className="flex-1 resize-none bg-transparent text-[11px] text-white placeholder-gray-500 focus:outline-none disabled:opacity-50 select-text font-mono leading-relaxed"
         />
 
         {isRunning ? (
           <button
             type="button"
             onClick={onStop}
-            className="shrink-0 w-7 h-7 flex items-center justify-center rounded-lg bg-red-500/20 text-red-400 hover:bg-red-500/30 transition-colors"
-            title="Stop"
+            className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg bg-red-500 text-white hover:bg-red-600 shadow-lg shadow-red-500/20 transition-all active:scale-95 animate-in fade-in zoom-in duration-200"
+            title="Stop Generation (Cmd+Esc)"
           >
-            <Square size={12} />
+            <Square size={14} fill="currentColor" />
           </button>
         ) : (
           <button
             type="button"
             onClick={handleSubmit}
             disabled={!canSend}
-            className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-150 ${
-              canSend
-                ? 'bg-blue-500 text-white hover:bg-blue-400'
-                : 'bg-white/5 text-gray-600'
-            }`}
+            className={`shrink-0 w-7 h-7 flex items-center justify-center rounded-lg transition-all duration-150 ${canSend
+              ? 'bg-blue-500 text-white hover:bg-blue-400'
+              : 'bg-white/5 text-gray-600'
+              }`}
             title="Send (Enter)"
           >
             <ArrowUp size={14} strokeWidth={2.5} />

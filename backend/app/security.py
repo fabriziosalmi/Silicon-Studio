@@ -43,14 +43,23 @@ def safe_user_file(user_path: str) -> Path:
 
     Allows paths under the user's home directory only.
     Blocks access to system paths and parent directory escapes.
+    Also blocks access to sensitive configuration directories.
 
     Returns the resolved Path if safe.
-    Raises ValueError if the path is not under home.
+    Raises ValueError if the path is not under home or is sensitive.
     """
     resolved = Path(user_path).resolve()
     home = Path.home().resolve()
+
     if not resolved.is_relative_to(home):
         raise ValueError(
             f"Access denied: path must be under your home directory"
         )
+
+    # Block access to sensitive directories
+    sensitive_dirs = {".ssh", ".gnupg", ".aws", ".kube", ".docker"}
+    for part in resolved.relative_to(home).parts:
+        if part in sensitive_dirs:
+            raise ValueError(f"Access denied: sensitive directory '{part}' is restricted")
+
     return resolved

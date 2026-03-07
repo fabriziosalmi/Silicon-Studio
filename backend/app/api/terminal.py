@@ -14,6 +14,7 @@ from app.agents.nanocore.types import TerminalRequest, DiffDecision, EscalationR
 from app.agents.nanocore.supervisor import SupervisorAgent
 from app.agents.nanocore.tools import run_bash
 from app.agents.nanocore.prompts import FILE_CONTEXT_INSTRUCTION
+from app.agents.nanocore.scout import ScoutAgent
 
 logger = logging.getLogger(__name__)
 
@@ -91,14 +92,40 @@ async def run_terminal(request: TerminalRequest):
             history.append({"role": turn.role, "content": turn.content})
 
     async def event_generator():
+        # Queue to merge events from supervisor and scout
+        queue = asyncio.Queue()
+        
+        async def put_agent_events():
+            try:
+                active_file_path = request.active_file.path if request.active_file else None
+                async for event in agent.run(prompt, history=history, active_file_path=active_file_path):
+                    await queue.put(event)
+            except Exception as e:
+                logger.error(f"Supervisor error: {e}")
+                await queue.put({"event": "error", "data": {"message": str(e)}})
+            finally:
+                await queue.put({"event": "done_internal", "data": {}})
+
+        # Scout agent: background monitor
+        scout = ScoutAgent(request.workspace_dir)
+        async def scout_emitter(event):
+            await queue.put(event)
+        
+        agent_task = asyncio.create_task(put_agent_events())
+        await scout.start(scout_emitter)
+
         try:
-            active_file_path = request.active_file.path if request.active_file else None
-            async for event in agent.run(prompt, history=history, active_file_path=active_file_path):
+            while True:
+                event = await queue.get()
+                if event.get("event") == "done_internal":
+                    break
                 yield f"data: {json.dumps(event)}\n\n"
         except Exception as e:
-            logger.error(f"Terminal session error: {e}")
+            logger.error(f"Terminal stream error: {e}")
             yield f"data: {json.dumps({'event': 'error', 'data': {'message': str(e)}})}\n\n"
         finally:
+            agent_task.cancel()
+            await scout.stop()
             agent.stop()
             await agent.process_manager.cleanup_all()
             async with _sessions_lock:

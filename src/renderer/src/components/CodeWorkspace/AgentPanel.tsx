@@ -1,6 +1,6 @@
 import { useCallback, useEffect } from 'react'
-import { Trash2, AlertCircle, Bot, Cpu, Clock, Undo2, Eye, Pencil } from 'lucide-react'
-import { useAgentSession, type ActiveFileContext } from './useAgentSession'
+import { Trash2, AlertCircle, Bot, Cpu, Clock, Undo2, Eye, Pencil, Brain, Zap, Search, ShieldCheck } from 'lucide-react'
+import { type ActiveFileContext } from './useAgentSession'
 import { AgentInputBar } from './AgentInputBar'
 import { MessageFeed } from '../Terminal/MessageFeed'
 import type { DiffMetadata } from '../Terminal/types'
@@ -21,19 +21,7 @@ function formatMs(ms: number): string {
   return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`
 }
 
-export function AgentPanel({ onOpenFile, onDiffProposal, onDiffSynced, onRegisterDiffDecider, getActiveFile, getWorkspaceDir }: AgentPanelProps) {
-  const handleDiffProposal = useCallback((filePath: string, meta: { callId: string; filePath: string; oldContent: string; newContent: string; diff: string }) => {
-    onOpenFile(filePath)
-    onDiffProposal?.(filePath, {
-      callId: meta.callId,
-      filePath: meta.filePath,
-      oldContent: meta.oldContent,
-      newContent: meta.newContent,
-      diff: meta.diff,
-      status: 'pending',
-    })
-  }, [onOpenFile, onDiffProposal])
-
+export function AgentPanel({ onDiffSynced, onRegisterDiffDecider, session }: AgentPanelProps & { session: any }) {
   const {
     feedItems,
     isRunning,
@@ -48,13 +36,14 @@ export function AgentPanel({ onOpenFile, onDiffProposal, onDiffSynced, onRegiste
     agentMode,
     setAgentMode,
     clearHistory,
-  } = useAgentSession({ onDiffProposal: handleDiffProposal, getActiveFile, getWorkspaceDir })
+    activeAgencyRole,
+  } = session
 
   // Wrap handleDiffDecided to also sync with CodeWorkspace (DiffEditor)
   const handleDiffDecided = useCallback((callId: string, approved: boolean, reason?: string) => {
     rawHandleDiffDecided(callId, approved, reason)
     // Find filePath from feed items
-    const item = feedItems.find(it => it.diffMeta?.callId === callId)
+    const item = feedItems.find((it: any) => it.diffMeta?.callId === callId)
     if (item?.diffMeta?.filePath && onDiffSynced) {
       onDiffSynced(item.diffMeta.filePath, approved)
     }
@@ -77,6 +66,20 @@ export function AgentPanel({ onOpenFile, onDiffProposal, onDiffSynced, onRegiste
     return () => window.removeEventListener('nanocore-prompt', handler)
   }, [isRunning, activeModel, handleSubmit])
 
+  // Commandment 8: Emergency Stop Shortcut (Cmd+Esc)
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Escape') {
+        if (isRunning) {
+          e.preventDefault()
+          handleStop()
+        }
+      }
+    }
+    window.addEventListener('keydown', handleGlobalKeyDown)
+    return () => window.removeEventListener('keydown', handleGlobalKeyDown)
+  }, [isRunning, handleStop])
+
   return (
     <div className="h-full flex flex-col">
       {/* Header with inline telemetry */}
@@ -89,39 +92,44 @@ export function AgentPanel({ onOpenFile, onDiffProposal, onDiffSynced, onRegiste
             <span className="text-gray-400 truncate max-w-[100px]">{activeModel?.name ?? '?'}</span>
             {isRunning && <span className="inline-block w-1.5 h-3 bg-blue-400 animate-pulse rounded-sm" />}
           </div>
-          <div className="flex items-center gap-0.5">
-            <button
-              type="button"
-              onClick={() => setAgentMode(agentMode === 'edit' ? 'review' : 'edit')}
-              className={`p-1 rounded-lg transition-colors ${
-                agentMode === 'review'
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-bold text-emerald-400 uppercase tracking-tight">
+              <ShieldCheck size={10} />
+              <span>Local Execution Only</span>
+            </div>
+            <div className="flex items-center gap-0.5">
+              <button
+                type="button"
+                onClick={() => setAgentMode(agentMode === 'edit' ? 'review' : 'edit')}
+                className={`p-1 rounded-lg transition-colors ${agentMode === 'review'
                   ? 'text-emerald-400 bg-emerald-500/10'
                   : 'text-gray-600 hover:text-blue-400 hover:bg-white/5'
-              }`}
-              title={agentMode === 'review' ? 'Review mode (read-only)' : 'Edit mode'}
-            >
-              {agentMode === 'review' ? <Eye size={12} /> : <Pencil size={12} />}
-            </button>
-            {feedItems.length > 0 && !isRunning && sessionId && (
-              <button
-                type="button"
-                onClick={handleUndo}
-                className="p-1 text-gray-600 hover:text-amber-400 hover:bg-white/5 rounded-lg transition-colors"
-                title="Undo last edit"
+                  }`}
+                title={agentMode === 'review' ? 'Review mode (read-only)' : 'Edit mode'}
               >
-                <Undo2 size={12} />
+                {agentMode === 'review' ? <Eye size={12} /> : <Pencil size={12} />}
               </button>
-            )}
-            {feedItems.length > 0 && !isRunning && (
-              <button
-                type="button"
-                onClick={clearHistory}
-                className="p-1 text-gray-600 hover:text-red-400 hover:bg-white/5 rounded-lg transition-colors"
-                title="Clear history"
-              >
-                <Trash2 size={12} />
-              </button>
-            )}
+              {feedItems.length > 0 && !isRunning && sessionId && (
+                <button
+                  type="button"
+                  onClick={handleUndo}
+                  className="p-1 text-gray-600 hover:text-amber-400 hover:bg-white/5 rounded-lg transition-colors"
+                  title="Undo last edit"
+                >
+                  <Undo2 size={12} />
+                </button>
+              )}
+              {feedItems.length > 0 && !isRunning && (
+                <button
+                  type="button"
+                  onClick={clearHistory}
+                  className="p-1 text-gray-600 hover:text-red-400 hover:bg-white/5 rounded-lg transition-colors"
+                  title="Clear history"
+                >
+                  <Trash2 size={12} />
+                </button>
+              )}
+            </div>
           </div>
         </div>
         {/* Compact telemetry bar — visible when running or after a run */}
@@ -140,19 +148,62 @@ export function AgentPanel({ onOpenFile, onDiffProposal, onDiffSynced, onRegiste
             )}
             {telemetry.tokenBudget > 0 && (
               <div className="flex-1 flex items-center gap-1.5 ml-auto">
-                <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden max-w-[60px]">
+                <span className="text-[9px] uppercase text-gray-600 font-bold">Budget</span>
+                <div className="flex-1 h-1 bg-white/5 rounded-full overflow-hidden max-w-[40px]">
                   <div
-                    className={`h-full rounded-full transition-all duration-300 ${
-                      telemetry.budgetFraction > 0.9 ? 'bg-red-500' :
+                    className={`h-full rounded-full transition-all duration-300 ${telemetry.budgetFraction > 0.9 ? 'bg-red-500' :
                       telemetry.budgetFraction > 0.7 ? 'bg-yellow-500' :
-                      'bg-blue-500'
-                    }`}
+                        'bg-blue-500'
+                      }`}
                     style={{ width: `${Math.min(100, telemetry.budgetFraction * 100)}%` }}
                   />
                 </div>
-                <span>{Math.round(telemetry.budgetFraction * 100)}%</span>
               </div>
             )}
+            {activeModel?.context_window && (
+              <div className="flex items-center gap-1.5 border-l border-white/[0.05] pl-3">
+                <span className="text-[9px] uppercase text-gray-600 font-bold">Context</span>
+                <div className="w-[60px] h-1 bg-white/5 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-emerald-500/50 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(100, (telemetry.tokensUsed / activeModel.context_window) * 100)}%` }}
+                  />
+                </div>
+                <span>{Math.round((telemetry.tokensUsed / activeModel.context_window) * 100)}%</span>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Agency HUD */}
+        {isRunning && activeAgencyRole && (
+          <div className="px-3 py-2 border-t border-white/[0.03] bg-blue-500/[0.02]">
+            <div className="flex items-center justify-between mb-1.5">
+              <span className="text-[9px] uppercase tracking-wider text-gray-500 font-bold">Agency Status</span>
+              <span className="text-[10px] text-blue-400 font-medium animate-pulse">{activeAgencyRole.status}</span>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className={`flex flex-col items-center gap-1 transition-opacity duration-300 ${activeAgencyRole.role === 'architetto' ? 'opacity-100' : 'opacity-30'}`}>
+                <div className={`p-1.5 rounded-lg ${activeAgencyRole.role === 'architetto' ? 'bg-blue-500/20 text-blue-400 ring-1 ring-blue-500/30' : 'bg-white/5 text-gray-500'}`}>
+                  <Brain size={14} />
+                </div>
+                <span className="text-[8px] font-medium uppercase tracking-tighter">Architetto</span>
+              </div>
+              <div className="h-4 w-[1px] bg-white/[0.05]" />
+              <div className={`flex flex-col items-center gap-1 transition-opacity duration-300 ${activeAgencyRole.role === 'operaio' ? 'opacity-100' : 'opacity-30'}`}>
+                <div className={`p-1.5 rounded-lg ${activeAgencyRole.role === 'operaio' ? 'bg-amber-500/20 text-amber-400 ring-1 ring-amber-500/30' : 'bg-white/5 text-gray-500'}`}>
+                  <Zap size={14} />
+                </div>
+                <span className="text-[8px] font-medium uppercase tracking-tighter">Operaio</span>
+              </div>
+              <div className="h-4 w-[1px] bg-white/[0.05]" />
+              <div className={`flex flex-col items-center gap-1 transition-opacity duration-300 ${activeAgencyRole.role === 'ispettore' ? 'opacity-100' : 'opacity-30'}`}>
+                <div className={`p-1.5 rounded-lg ${activeAgencyRole.role === 'ispettore' ? 'bg-emerald-500/20 text-emerald-400 ring-1 ring-emerald-500/30' : 'bg-white/5 text-gray-500'}`}>
+                  <Search size={14} />
+                </div>
+                <span className="text-[8px] font-medium uppercase tracking-tighter">Ispettore</span>
+              </div>
+            </div>
           </div>
         )}
       </div>

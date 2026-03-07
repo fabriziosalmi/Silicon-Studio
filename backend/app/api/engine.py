@@ -217,6 +217,23 @@ async def chat_generation(request: ChatRequest):
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
 
+class PredictRequest(BaseModel):
+    model_id: str = Field(min_length=1, max_length=255)
+    prompt: str = Field(min_length=1)
+    max_tokens: int = Field(default=50, ge=1, le=128)
+
+@router.post("/predict")
+async def predict_completion(request: PredictRequest):
+    """Generate a fast, non-streaming code completion (Ghost Text)."""
+    result = await service.predict_completion(
+        request.model_id, 
+        request.prompt, 
+        request.max_tokens
+    )
+    if "error" in result:
+        raise HTTPException(status_code=500, detail=result["error"])
+    return result
+
 @router.post("/chat/stop")
 async def stop_generation():
     """Stop current generation."""

@@ -3,7 +3,6 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Copy, Check, FileInput } from 'lucide-react'
 
-const DEBOUNCE_MS = 120
 
 /**
  * Code block with Copy / Apply actions.
@@ -147,39 +146,60 @@ const MemoizedMarkdown = memo(function MemoizedMarkdown({ content }: { content: 
 })
 
 /**
- * Renders markdown with debounced updates during streaming.
- */
+* Renders markdown with a smooth "Liquid Flow" effect.
+* Instead of jumping, it trickles characters from the buffer at a constant rate.
+*/
 export function StreamingMarkdown({ content }: { content: string }) {
-  const [renderedContent, setRenderedContent] = useState(content)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const prevLenRef = useRef(content.length)
+  const [displayedText, setDisplayedText] = useState(content)
+  const bufferRef = useRef(content)
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
+  // Update buffer when content changes
   useEffect(() => {
-    const isGrowing = content.length > prevLenRef.current
-    prevLenRef.current = content.length
+    bufferRef.current = content
 
-    if (!isGrowing) {
-      if (timerRef.current) clearTimeout(timerRef.current)
-      setRenderedContent(content)
-      return
+    // If we are already caught up and new content arrives, start the trickle
+    if (!intervalRef.current) {
+      intervalRef.current = setInterval(() => {
+        setDisplayedText((prev) => {
+          if (prev.length < bufferRef.current.length) {
+            // Add 1-3 chars for a more natural flow
+            const sliceSize = Math.min(3, bufferRef.current.length - prev.length)
+            return prev + bufferRef.current.slice(prev.length, prev.length + sliceSize)
+          } else {
+            // Already caught up
+            if (intervalRef.current) {
+              clearInterval(intervalRef.current)
+              intervalRef.current = null
+            }
+            return prev
+          }
+        })
+      }, 25) // Smooth 40fps trickle
     }
 
-    if (timerRef.current) clearTimeout(timerRef.current)
-    timerRef.current = setTimeout(() => {
-      setRenderedContent(content)
-    }, DEBOUNCE_MS)
-
     return () => {
-      if (timerRef.current) clearTimeout(timerRef.current)
+      if (content.length === bufferRef.current.length && displayedText.length === content.length) {
+        // wait for next update
+      }
     }
   }, [content])
 
-  const tail = content.slice(renderedContent.length)
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      if (intervalRef.current) clearInterval(intervalRef.current)
+    }
+  }, [])
+
+  const isStreaming = displayedText.length < content.length
 
   return (
-    <>
-      <MemoizedMarkdown content={renderedContent} />
-      {tail && <span className="whitespace-pre-wrap">{tail}</span>}
-    </>
+    <div className="relative">
+      <MemoizedMarkdown content={displayedText} />
+      {isStreaming && (
+        <span className="inline-block w-1.5 h-3.5 bg-blue-400/80 ml-1 translate-y-0.5 animate-pulse rounded-sm" />
+      )}
+    </div>
   )
 }

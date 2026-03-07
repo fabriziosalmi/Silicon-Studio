@@ -1,7 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { useGlobalState } from '../../context/GlobalState'
 import { apiClient } from '../../api/client'
-import type { FeedItem, TelemetryData, SSEEvent } from '../Terminal/types'
+import type { FeedItem, TelemetryData, SSEEvent, ScoutAlertMetadata } from '../Terminal/types'
 
 const EMPTY_TELEMETRY: TelemetryData = {
   agent: '',
@@ -63,15 +63,19 @@ interface UseAgentSessionOptions {
   onDiffProposal?: (filePath: string, meta: DiffProposalMeta) => void
   getActiveFile?: () => ActiveFileContext | null
   getWorkspaceDir?: () => string | null
+  lowPowerMode?: boolean
 }
 
 export function useAgentSession(options?: UseAgentSessionOptions) {
   const { activeModel } = useGlobalState()
   const [feedItems, setFeedItems] = useState<FeedItem[]>(loadPersistedFeed)
   const [isRunning, setIsRunning] = useState(false)
-  const [sessionId, setSessionId] = useState('')
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  const [activeAgencyRole, setActiveAgencyRole] = useState<{ role: 'architetto' | 'operaio' | 'ispettore'; status: string } | null>(null)
   const [telemetry, setTelemetry] = useState<TelemetryData>(loadPersistedTelemetry)
   const [agentMode, setAgentMode] = useState<'edit' | 'review'>('edit')
+  const [pinnedItems, setPinnedItems] = useState<{ id: string; type: 'file' | 'text'; name: string; content: string }[]>([])
+  const [scoutIssues, setScoutIssues] = useState<ScoutAlertMetadata['issues']>([])
 
   const aiTextIdRef = useRef<string | null>(null)
   const toolOutputIdRef = useRef<string | null>(null)
@@ -133,8 +137,17 @@ export function useAgentSession(options?: UseAgentSessionOptions) {
   const clearHistory = useCallback(() => {
     setFeedItems([])
     setTelemetry(EMPTY_TELEMETRY)
+    setPinnedItems([])
     sessionStorage.removeItem(STORAGE_KEY_FEED)
     sessionStorage.removeItem(STORAGE_KEY_TELEMETRY)
+  }, [])
+
+  const togglePin = useCallback((item: { id: string; type: 'file' | 'text'; name: string; content: string }) => {
+    setPinnedItems((prev) => {
+      const exists = prev.find((it) => it.id === item.id)
+      if (exists) return prev.filter((it) => it.id !== item.id)
+      return [...prev, item]
+    })
   }, [])
 
   // SSE stream consumer
@@ -201,6 +214,11 @@ export function useAgentSession(options?: UseAgentSessionOptions) {
       switch (evt.event) {
         case 'session_start':
           setSessionId(d.session_id as string)
+          addFeedItem({ id: crypto.randomUUID(), type: 'info', content: `Session started. ${d.git_snapshot ? `Snapshot: ${d.git_snapshot}` : ''}`, timestamp: Date.now() })
+          break
+
+        case 'agency_status':
+          setActiveAgencyRole({ role: d.role as 'architetto' | 'operaio' | 'ispettore', status: d.status as string })
           break
 
         case 'token_stream': {
@@ -407,6 +425,47 @@ export function useAgentSession(options?: UseAgentSessionOptions) {
           break
         }
 
+        case 'agency_trace':
+          addFeedItem({
+            id: crypto.randomUUID(),
+            type: 'agency_trace' as const,
+            content: d.content as string,
+            timestamp: Date.now(),
+            agencyTraceMeta: {
+              role: d.role as 'architetto' | 'operaio' | 'ispettore',
+              content: d.content as string,
+              target: d.target as string
+            }
+          })
+          break
+        case 'rag_search':
+          addFeedItem({
+            id: crypto.randomUUID(),
+            type: 'rag_search' as const,
+            content: `Found ${((d.results as any[]) || []).length} relevant snippets`,
+            timestamp: Date.now(),
+            ragSearchMeta: {
+              query: d.query as string,
+              results: d.results as any[]
+            }
+          })
+          break
+        case 'scout_alert':
+          if (options?.lowPowerMode) {
+            console.log("Ignoring Scout Alert due to Low Power Mode")
+            break
+          }
+          setScoutIssues((prev: ScoutAlertMetadata['issues']) => [...prev, ...(d.issues as any[])])
+          addFeedItem({
+            id: crypto.randomUUID(),
+            type: 'scout_alert' as const,
+            content: `Scout Agent found ${((d.issues as any[]) || []).length} potential issues`,
+            timestamp: Date.now(),
+            scoutAlertMeta: {
+              issues: d.issues as any[]
+            }
+          })
+          break
         case 'error':
           addFeedItem({ id: crypto.randomUUID(), type: 'error', content: d.message as string, timestamp: Date.now() })
           break
@@ -441,6 +500,8 @@ export function useAgentSession(options?: UseAgentSessionOptions) {
     setTelemetry(EMPTY_TELEMETRY)
     aiTextIdRef.current = null
     toolOutputIdRef.current = null
+    setActiveAgencyRole(null) // Reset active agency role on new submission
+    setScoutIssues([]) // Reset scout issues on new submission
 
     if (!activeModel) {
       addFeedItem({ id: crypto.randomUUID(), type: 'error', content: 'No model loaded. Load a model from the Models tab first.', timestamp: Date.now() })
@@ -450,6 +511,16 @@ export function useAgentSession(options?: UseAgentSessionOptions) {
 
     // Build conversation history from previous feed items (multi-turn memory)
     const history: { role: string; content: string }[] = []
+
+    // Inject pinned context as a special system instruction or early user message
+    if (pinnedItems.length > 0) {
+      const contextBlocks = pinnedItems.map(it => `[PINNED ${it.type.toUpperCase()}: ${it.name}]\n${it.content}`).join('\n\n---\n\n')
+      history.push({
+        role: 'system',
+        content: `IMPORTANT CONTEXT (Pinned by user):\nThe following files/code snippets are critical for this task. Refer to them as ground truth:\n\n${contextBlocks}`
+      })
+    }
+
     for (const item of feedItems) {
       if (item.type === 'user') {
         history.push({ role: 'user', content: item.content })
@@ -473,6 +544,7 @@ export function useAgentSession(options?: UseAgentSessionOptions) {
     setIsRunning(false)
     aiTextIdRef.current = null
     toolOutputIdRef.current = null
+    setActiveAgencyRole(null) // Clear active agency role when session ends
   }, [isRunning, activeModel, addFeedItem, consumeSSE, agentMode])
 
   const handleStop = useCallback(async () => {
@@ -517,8 +589,12 @@ export function useAgentSession(options?: UseAgentSessionOptions) {
     handleSubmit,
     handleStop,
     handleUndo,
+    activeAgencyRole,
     handleDiffDecided,
     handleEscalationResponded,
     clearHistory,
+    pinnedItems,
+    togglePin,
+    scoutIssues,
   }
 }

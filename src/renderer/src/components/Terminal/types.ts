@@ -12,6 +12,9 @@ export type FeedItemType =
   | 'auto_retry'
   | 'error'
   | 'info'
+  | 'agency_trace'
+  | 'rag_search'
+  | 'scout_alert'
 
 export interface DiffMetadata {
   callId: string
@@ -44,6 +47,29 @@ export interface AutoRetryMetadata {
   status: 'retrying' | 'resolved' | 'exhausted'
 }
 
+export interface AgencyTraceMetadata {
+  role: 'architetto' | 'operaio' | 'ispettore'
+  content: string
+  target?: string
+}
+
+export interface RAGSearchMetadata {
+  query: string
+  results: Array<{
+    file_path: string
+    score: number
+    method: string
+  }>
+}
+
+export interface ScoutAlertMetadata {
+  issues: Array<{
+    file: string
+    type: 'error' | 'warning'
+    message: string
+  }>
+}
+
 export interface FeedItem {
   id: string
   type: FeedItemType
@@ -53,6 +79,9 @@ export interface FeedItem {
   diffMeta?: DiffMetadata
   escalationMeta?: EscalationMetadata
   autoRetryMeta?: AutoRetryMetadata
+  agencyTraceMeta?: AgencyTraceMetadata
+  ragSearchMeta?: RAGSearchMetadata
+  scoutAlertMeta?: ScoutAlertMetadata
 }
 
 export interface TelemetryAction {

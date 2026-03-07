@@ -39,7 +39,7 @@ async def index_directory(req: IndexRequest):
 async def search_codebase(req: SearchRequest):
     """Search the indexed codebase with hybrid BM25 + vector search."""
     from app.codebase.service import codebase_service
-    results = codebase_service.search(req.query, top_k=req.top_k)
+    results = await run_in_threadpool(codebase_service.search, req.query, top_k=req.top_k)
     return {"results": [r.to_dict() for r in results]}
 
 

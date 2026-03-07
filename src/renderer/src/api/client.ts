@@ -376,6 +376,15 @@ export const apiClient = {
             await throwIfNotOk(res, 'Failed to stop chat generation');
             return res.json();
         },
+        predict: async (modelId: string, prompt: string, maxTokens: number = 50): Promise<{ completion: string }> => {
+            const res = await fetch(`${API_BASE}/api/engine/predict`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ model_id: modelId, prompt, max_tokens: maxTokens })
+            });
+            await throwIfNotOk(res, 'Prediction failed');
+            return res.json();
+        },
         listAdapters: async (): Promise<ModelEntry[]> => {
             const res = await fetch(`${API_BASE}/api/engine/models/adapters`);
             await throwIfNotOk(res, 'Failed to fetch adapters');
@@ -546,6 +555,25 @@ export const apiClient = {
         },
     },
     sandbox: {
+        startDebug: async (code: string, filename: string = 'script.py'): Promise<{ session_id: string }> => {
+            const res = await fetch(`${API_BASE}/api/sandbox/debug/start`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code, filename })
+            });
+            await throwIfNotOk(res, 'Failed to start debugger');
+            return res.json();
+        },
+        sendCommand: async (sessionId: string, cmd: string): Promise<{ status: string }> => {
+            const res = await fetch(`${API_BASE}/api/sandbox/debug/${sessionId}/command?cmd=${encodeURIComponent(cmd)}`, {
+                method: 'POST'
+            });
+            await throwIfNotOk(res, 'Failed to send debug command');
+            return res.json();
+        },
+        getDebugStream: (sessionId: string): string => {
+            return `${API_BASE}/api/sandbox/debug/${sessionId}/events`;
+        },
         check: async (code: string, language: string = ''): Promise<SyntaxCheckResult> => {
             const res = await fetch(`${API_BASE}/api/sandbox/check`, {
                 method: 'POST',

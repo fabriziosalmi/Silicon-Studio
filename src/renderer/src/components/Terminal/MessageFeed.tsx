@@ -115,6 +115,14 @@ function CollapsibleToolOutput({ item }: { item: FeedItem }) {
   const isError = item.toolMeta?.exitCode !== undefined && item.toolMeta.exitCode !== 0
   const [open, setOpen] = useState(isError) // auto-expand on error
 
+  useEffect(() => {
+    if (isError && command) {
+      window.dispatchEvent(new CustomEvent('nanocore-terminal-error', {
+        detail: { command, output: item.content, exitCode: item.toolMeta?.exitCode }
+      }))
+    }
+  }, [isError, command, item.content])
+
   return (
     <div className="rounded-[10px] overflow-hidden border border-white/[0.06] bg-white/[0.02]">
       <button
@@ -157,9 +165,8 @@ function CollapsibleToolOutput({ item }: { item: FeedItem }) {
             </div>
           )}
           <div className="bg-black/60 px-3 py-2 overflow-x-auto max-h-60 overflow-y-auto">
-            <pre className={`text-xs font-mono select-text whitespace-pre-wrap break-words leading-relaxed ${
-              isError ? 'text-red-300/90' : 'text-green-300/90'
-            }`}>
+            <pre className={`text-xs font-mono select-text whitespace-pre-wrap break-words leading-relaxed ${isError ? 'text-red-300/90' : 'text-green-300/90'
+              }`}>
               {rendered}
             </pre>
           </div>
@@ -208,6 +215,104 @@ function ThinkingBlock({ item }: { item: FeedItem }) {
 }
 
 /**
+ * Collapsible agency trace block (Commandment 7).
+ */
+function TraceBlock({ item }: { item: FeedItem }) {
+  const [open, setOpen] = useState(false)
+  const meta = item.agencyTraceMeta
+  if (!meta) return null
+
+  const roleColors = {
+    architetto: 'text-blue-400 border-blue-500/20 bg-blue-500/5',
+    operaio: 'text-amber-400 border-amber-500/20 bg-amber-500/5',
+    ispettore: 'text-emerald-400 border-emerald-500/20 bg-emerald-500/5'
+  }
+
+  return (
+    <div className={`rounded-[10px] overflow-hidden border ${roleColors[meta.role]}`}>
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-white/[0.02] transition-colors cursor-pointer"
+      >
+        <ChevronRight
+          size={12}
+          className={`opacity-50 transition-transform shrink-0 ${open ? 'rotate-90' : ''}`}
+        />
+        <Brain size={12} className="opacity-60 shrink-0" />
+        <span className="text-[10px] font-bold uppercase tracking-wider opacity-80">
+          Reasoning: {meta.role}
+        </span>
+        {!open && (
+          <span className="text-[10px] opacity-60 truncate flex-1 italic ml-2">
+            Click to explain the reasoning...
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="border-t border-white/[0.05] px-3 py-2 max-h-60 overflow-y-auto">
+          <div className="text-[11px] text-gray-300 whitespace-pre-wrap select-text leading-relaxed font-mono">
+            <StreamingMarkdown content={meta.content} />
+          </div>
+          {meta.target && (
+            <div className="mt-2 pt-2 border-t border-white/[0.03] text-[9px] text-gray-500 font-mono">
+              Target: {meta.target}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
+ * Collapsible RAG search trace block (Commandment 17).
+ */
+function RAGSearchBlock({ item }: { item: FeedItem }) {
+  const [open, setOpen] = useState(false)
+  const meta = item.ragSearchMeta
+  if (!meta) return null
+
+  return (
+    <div className="rounded-[10px] overflow-hidden border border-blue-500/10 bg-blue-500/[0.03]">
+      <button
+        type="button"
+        onClick={() => setOpen(!open)}
+        className="w-full flex items-center gap-2 px-3 py-1.5 text-left hover:bg-blue-500/[0.05] transition-colors cursor-pointer"
+      >
+        <ChevronRight
+          size={12}
+          className={`text-blue-400/60 transition-transform shrink-0 ${open ? 'rotate-90' : ''}`}
+        />
+        <Info size={12} className="text-blue-400/60 shrink-0" />
+        <span className="text-[11px] font-medium text-blue-300/70">
+          Context Discovery: {meta.results.length} snippets found
+        </span>
+        {!open && (
+          <span className="text-[11px] text-gray-500 truncate flex-1 italic ml-2">
+            "{meta.query}"
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <div className="border-t border-blue-500/10 px-3 py-2 max-h-40 overflow-y-auto">
+          <div className="space-y-1.5">
+            {meta.results.map((r, i) => (
+              <div key={i} className="flex items-center justify-between text-[10px] font-mono">
+                <span className="text-blue-400/90 truncate mr-4">{r.file_path}</span>
+                <span className="text-gray-600 shrink-0">{(r.score * 100).toFixed(0)}% match ({r.method})</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/**
  * Memoized individual feed item — only re-renders when the item itself changes.
  */
 const FeedItemView = memo(function FeedItemView({
@@ -227,9 +332,9 @@ const FeedItemView = memo(function FeedItemView({
       return (
         <div className="flex justify-end">
           <div className="flex items-start gap-2 max-w-[80%]">
-            <div className="bg-blue-600/20 border border-blue-500/20 rounded-lg px-3 py-2 text-sm text-white select-text">
+            <div className="bg-blue-600/20 border border-blue-500/20 rounded-lg px-3 py-2 text-[11px] text-white select-text">
               {hasCodeBlock ? (
-                <div className="prose prose-invert prose-sm max-w-none text-sm">
+                <div className="prose prose-invert prose-sm max-w-none text-[11px]">
                   <StreamingMarkdown content={item.content} />
                 </div>
               ) : (
@@ -252,7 +357,7 @@ const FeedItemView = memo(function FeedItemView({
           <div className="w-6 h-6 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0 mt-0.5">
             <Bot size={14} className="text-blue-400" />
           </div>
-          <div className="min-w-0 flex-1 prose prose-invert prose-sm max-w-none text-sm text-gray-200 select-text break-words overflow-hidden">
+          <div className="min-w-0 flex-1 prose prose-invert prose-sm max-w-none text-[11px] text-gray-200 select-text break-words overflow-hidden font-mono">
             <StreamingMarkdown content={cleanContent} />
           </div>
         </div>
@@ -357,6 +462,12 @@ const FeedItemView = memo(function FeedItemView({
           <span className="text-xs text-gray-500">{item.content}</span>
         </div>
       )
+
+    case 'agency_trace':
+      return <TraceBlock item={item} />
+
+    case 'rag_search':
+      return <RAGSearchBlock item={item} />
 
     default:
       return null

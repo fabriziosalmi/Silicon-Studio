@@ -12,6 +12,9 @@ from pathlib import Path
 from typing import AsyncGenerator
 
 import aiofiles
+import json
+import ast
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +60,8 @@ def _is_protected_path(file_path: str) -> str | None:
 
 # Commands that require explicit user confirmation (handled via diff approval flow)
 DESTRUCTIVE_PREFIXES = [
-    "rm ", "rm\t", "rmdir ",
+    "rm ", "rm\t",
+    "rmdir ",
     "sudo ",
     "mv ", "mv\t",
     "chmod ", "chown ",
@@ -286,7 +290,7 @@ async def read_file(file_path: str, max_lines: int = 300) -> dict:
             "file_path": file_path,
             "content": "",
             "lines": 0,
-            "error": f"File too large ({file_size // 1024} KB, max {MAX_EDIT_FILE_BYTES // 1024} KB). Use run_bash with head/tail to read portions.",
+            "error": f"File too large ({file_size // 1024} KB, max {MAX_EDIT_FILE_BYTES // 1024} KB).",
         }
 
     try:
@@ -303,12 +307,11 @@ async def read_file(file_path: str, max_lines: int = 300) -> dict:
     all_lines = content.splitlines()
     total_lines = len(all_lines)
 
-    # Cap output to max_lines to avoid blowing context
     if total_lines > max_lines:
         shown = "\n".join(
             f"{i+1:4d} | {line}" for i, line in enumerate(all_lines[:max_lines])
         )
-        shown += f"\n[... {total_lines - max_lines} more lines, use run_bash with sed/head to see the rest]"
+        shown += f"\n[... {total_lines - max_lines} more lines]"
     else:
         shown = "\n".join(
             f"{i+1:4d} | {line}" for i, line in enumerate(all_lines)
@@ -320,6 +323,78 @@ async def read_file(file_path: str, max_lines: int = 300) -> dict:
         "lines": total_lines,
         "error": None,
     }
+
+
+async def generate_codemap(root_dir: str) -> str:
+    """Scan the codebase and generate a CODEMAP.md with Mermaid architecture diagram."""
+    from app.codebase.chunker import TEXT_EXTENSIONS, _should_skip_dir
+
+    deps = {}  # module -> set(dependencies)
+    root = Path(root_dir).resolve()
+
+    for dirpath, dirnames, filenames in os.walk(root):
+        dirnames[:] = [d for d in dirnames if not _should_skip_dir(d)]
+        for fname in filenames:
+            fpath = Path(dirpath) / fname
+            if fpath.suffix not in (".py", ".js", ".ts", ".tsx"):
+                continue
+            
+            rel_path = fpath.relative_to(root)
+            mod_name = str(rel_path).replace(os.sep, ".").replace(fpath.suffix, "")
+            if mod_name not in deps:
+                deps[mod_name] = set()
+
+            try:
+                content = fpath.read_text(errors="ignore")
+                if fpath.suffix == ".py":
+                    tree = ast.parse(content)
+                    for node in ast.walk(tree):
+                        if isinstance(node, ast.Import):
+                            for alias in node.names:
+                                deps[mod_name].add(alias.name.split(".")[0])
+                        elif isinstance(node, ast.ImportFrom):
+                            if node.module:
+                                deps[mod_name].add(node.module.split(".")[0])
+                else:
+                    # Simple regex for JS/TS imports
+                    imports = re.findall(r"from\s+['\"](.+?)['\"]", content)
+                    imports += re.findall(r"import\s+['\"](.+?)['\"]", content)
+                    for imp in imports:
+                        if imp.startswith("."):
+                            # Resolve relative import to "module" style
+                            target = (rel_path.parent / imp).resolve()
+                            try:
+                                imp_rel = target.relative_to(root)
+                                deps[mod_name].add(str(imp_rel).replace(os.sep, "."))
+                            except ValueError:
+                                pass
+                        else:
+                            deps[mod_name].add(imp.split("/")[0])
+            except Exception:
+                continue
+
+    # Build Mermaid graph
+    lines = ["# Codebase Architecture Map\n", "```mermaid", "graph TD"]
+    # Filter only internal dependencies (those that exist as keys in deps)
+    internal_mods = set(deps.keys())
+    for mod, targets in deps.items():
+        # Shorten module names for better graph readability
+        short_mod = mod.split(".")[-1]
+        for t in targets:
+            # Check if t is an internal module or a sub-part of one
+            is_internal = any(t == m or m.startswith(t + ".") for m in internal_mods)
+            if is_internal and t != mod:
+                short_t = t.split(".")[-1]
+                lines.append(f"  {short_mod} --> {short_t}")
+
+    lines.append("```\n")
+    output_path = root / "CODEMAP.md"
+    content = "\n".join(lines)
+    
+    with open(output_path, "w") as f:
+        f.write(content)
+    
+    return f"Successfully generated architecture map at {output_path}"
 
 
 async def generate_edit_diff(file_path: str, new_content: str) -> dict:
@@ -531,12 +606,27 @@ async def git_tool(subcommand: str, args: str = "") -> dict:
         return {"output": "", "error": str(e)}
 
 
-async def check_broken_imports(file_path: str, old_content: str, new_content: str) -> str | None:
-    """Check if an edit broke imports/exports that other files depend on.
-
-    Looks for removed exports (Python: def/class, JS/TS: export) and
-    greps the codebase for importers. Returns a warning string or None.
+async def check_broken_imports(file_path: str, old_content: str = None, new_content: str = None) -> str | None:
+    """Check if a file has broken imports or if an edit broke dependencies.
+    
+    If old_content and new_content are provided, it checks the diff.
+    If only file_path is provided, it performs a static check on the current file.
     """
+    ext = Path(file_path).suffix.lower()
+    
+    # 1. Background static check (Scout mode)
+    if old_content is None or new_content is None:
+        try:
+            content = Path(file_path).read_text(errors="ignore")
+            if ext == ".py":
+                ast.parse(content) # Check syntax
+            return None # Implementation placeholder for deeper background checks
+        except SyntaxError as e:
+            return f"Syntax error: {e}"
+        except Exception:
+            return None
+
+    # 2. Patch verification mode (Supervisor mode)
     ext = Path(file_path).suffix.lower()
     removed_symbols = []
 

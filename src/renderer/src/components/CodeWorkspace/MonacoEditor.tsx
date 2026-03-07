@@ -6,13 +6,21 @@ type EditorProps = ComponentProps<typeof MonacoEditorType>
 
 const Editor = lazy(() => import('@monaco-editor/react'))
 
+import { useHolographicDiff } from './useHolographicDiff'
+import { apiClient } from '../../api/client'
+
 interface MonacoEditorProps {
   filePath: string
   content: string
   language: string
   onSave: (path: string, content: string) => Promise<void>
   onChange: (content: string) => void
+  originalContent?: string | null
+  activeModelId?: string | null
+  debugLine?: number | null
 }
+
+import './debugger.css'
 
 function EditorFallback() {
   return (
@@ -25,14 +33,92 @@ function EditorFallback() {
   )
 }
 
-export function MonacoEditor({ filePath, content, language, onSave, onChange }: MonacoEditorProps) {
+export function MonacoEditor({ filePath, content, language, onSave, onChange, originalContent, activeModelId, debugLine }: MonacoEditorProps) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const editorRef = useRef<any>(null)
+
+  useHolographicDiff(editorRef.current, originalContent || null, content)
   // Refs to avoid stale closures in Monaco's addCommand callback
   const filePathRef = useRef(filePath)
   const onSaveRef = useRef(onSave)
   filePathRef.current = filePath
   onSaveRef.current = onSave
+  const activeModelIdRef = useRef(activeModelId)
+  activeModelIdRef.current = activeModelId
+
+  const debugDecorationsRef = useRef<string[]>([])
+  useEffect(() => {
+    if (!editorRef.current || !debugLine) {
+      if (editorRef.current && debugDecorationsRef.current.length > 0) {
+        editorRef.current.deltaDecorations(debugDecorationsRef.current, [])
+        debugDecorationsRef.current = []
+      }
+      return
+    }
+
+    const monaco = (window as any).monaco
+    if (!monaco) return
+
+    const newDecorations = [
+      {
+        range: new monaco.Range(debugLine, 1, debugLine, 1),
+        options: {
+          isWholeLine: true,
+          className: 'debug-line-highlight',
+          glyphMarginClassName: 'debug-line-glyph',
+          description: 'debug-current-line'
+        }
+      }
+    ]
+
+    debugDecorationsRef.current = editorRef.current.deltaDecorations(debugDecorationsRef.current, newDecorations)
+    editorRef.current.revealLineInCenterIfOutsideViewport(debugLine)
+  }, [debugLine])
+
+  // Ghost Text (Inline Completions)
+  useEffect(() => {
+    const monaco = (window as any).monaco
+    if (!monaco) return
+
+    const provider = monaco.languages.registerInlineCompletionsProvider(language, {
+      provideInlineCompletions: async (model: any, position: any) => {
+        if (!activeModelIdRef.current || originalContent) return { items: [] }
+
+        // Get context before cursor (max 1000 chars for speed)
+        const textUntilPosition = model.getValueInRange({
+          startLineNumber: Math.max(1, position.lineNumber - 20),
+          startColumn: 1,
+          endLineNumber: position.lineNumber,
+          endColumn: position.column
+        })
+
+        try {
+          const res = await apiClient.engine.predict(activeModelIdRef.current, textUntilPosition, 30)
+          if (res.completion) {
+            return {
+              items: [
+                {
+                  insertText: res.completion,
+                  range: new monaco.Range(
+                    position.lineNumber,
+                    position.column,
+                    position.lineNumber,
+                    position.column
+                  )
+                }
+              ]
+            }
+          }
+        } catch (err) {
+          console.debug('Ghost text prediction failed:', err)
+        }
+        return { items: [] }
+      },
+      freeInlineCompletions: () => { }
+    })
+
+    return () => provider.dispose()
+  }, [language, originalContent])
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const handleEditorDidMount = useCallback((editor: any, _monaco: any) => {
@@ -45,6 +131,36 @@ export function MonacoEditor({ filePath, content, language, onSave, onChange }: 
       () => {
         const currentContent = editor.getValue()
         onSaveRef.current(filePathRef.current, currentContent)
+      }
+    )
+
+    // Cmd+K to trigger inline edit
+    editor.addCommand(
+      2048 | 39, // CtrlCmd = 2048, KeyK = 39
+      () => {
+        const selection = editor.getSelection()
+        if (!selection || selection.isEmpty()) return
+
+        const coords = editor.getScrolledVisiblePosition(selection.getStartPosition())
+        const domNode = editor.getDomNode()
+        const rect = domNode?.getBoundingClientRect()
+
+        const event = new CustomEvent('nanocore-inline-edit', {
+          detail: {
+            selection: {
+              startLine: selection.startLineNumber,
+              startColumn: selection.startColumn,
+              endLine: selection.endLineNumber,
+              endColumn: selection.endColumn,
+              text: editor.getModel()?.getValueInRange(selection) || ''
+            },
+            position: {
+              x: (rect?.left || 0) + (coords?.left || 0),
+              y: (rect?.top || 0) + (coords?.top || 0) + 20
+            }
+          }
+        })
+        window.dispatchEvent(event)
       }
     )
 
@@ -121,7 +237,7 @@ export function MonacoEditor({ filePath, content, language, onSave, onChange }: 
     onChange: handleChange,
     options: {
       fontSize: 13,
-      fontFamily: "'SF Mono', 'Fira Code', 'JetBrains Mono', monospace",
+      fontFamily: "'JetBrains Mono', 'Fira Code', 'SF Mono', monospace",
       minimap: { enabled: false },
       scrollBeyondLastLine: false,
       padding: { top: 8 },

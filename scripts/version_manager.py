@@ -12,6 +12,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 PACKAGE_JSON = ROOT / "package.json"
 PYPROJECT = ROOT / "backend" / "pyproject.toml"
+BACKEND_VERSION = ROOT / "backend" / "app" / "version.py"
 README = ROOT / "README.md"
 
 SEMVER_RE = re.compile(r"^(\d+)\.(\d+)\.(\d+)$")
@@ -21,7 +22,8 @@ README_BADGE_RE = re.compile(r"(version-)(\d+\.\d+\.\d+)(-blue)")
 @dataclass(frozen=True)
 class Versions:
     package: str
-    backend: str
+    backend_toml: str
+    backend_py: str
     readme_badge: str
 
 
@@ -43,9 +45,19 @@ def _read_package_version() -> str:
 
 def _read_pyproject_version() -> str:
     text = PYPROJECT.read_text(encoding="utf-8")
-    m = re.search(r'^version\s*=\s*"([0-9]+\.[0-9]+\.[0-9]+)"\s*$', text, re.MULTILINE)
+    m = re.search(r'^version\s*=\s*"([^"]+)"', text, re.MULTILINE)
     if not m:
-        raise ValueError("Cannot find [project].version in backend/pyproject.toml")
+        raise ValueError("Cannot find version in backend/pyproject.toml")
+    return m.group(1)
+
+
+def _read_backend_py_version() -> str:
+    if not BACKEND_VERSION.exists():
+        return ""
+    text = BACKEND_VERSION.read_text(encoding="utf-8")
+    m = re.search(r'^__version__\s*=\s*"([^"]+)"', text, re.MULTILINE)
+    if not m:
+        return ""
     return m.group(1)
 
 
@@ -60,18 +72,22 @@ def _read_readme_badge_version() -> str:
 def read_versions() -> Versions:
     return Versions(
         package=_read_package_version(),
-        backend=_read_pyproject_version(),
+        backend_toml=_read_pyproject_version(),
+        backend_py=_read_backend_py_version(),
         readme_badge=_read_readme_badge_version(),
     )
 
 
 def assert_synced(v: Versions) -> None:
-    values = {v.package, v.backend, v.readme_badge}
-    if len(values) != 1:
-        raise ValueError(
-            "Version mismatch: "
-            f"package.json={v.package}, backend/pyproject.toml={v.backend}, README badge={v.readme_badge}"
-        )
+    expected = v.package
+    actuals = {
+        "pyproject.toml": v.backend_toml,
+        "backend/app/version.py": v.backend_py,
+        "README.md badge": v.readme_badge
+    }
+    mismatches = [f"{k}={val}" for k, val in actuals.items() if val and val != expected]
+    if mismatches:
+        raise ValueError(f"Version mismatch (expected {expected}): " + ", ".join(mismatches))
 
 
 def bump(version: str, bump_type: str) -> str:
@@ -99,7 +115,7 @@ def _write_package_version(version: str) -> None:
 def _write_pyproject_version(version: str) -> None:
     text = PYPROJECT.read_text(encoding="utf-8")
     new_text, count = re.subn(
-        r'^version\s*=\s*"[0-9]+\.[0-9]+\.[0-9]+"\s*$',
+        r'^version\s*=\s*"[^"]+"',
         f'version = "{version}"',
         text,
         count=1,
@@ -108,6 +124,11 @@ def _write_pyproject_version(version: str) -> None:
     if count != 1:
         raise ValueError("Failed to update backend/pyproject.toml version")
     PYPROJECT.write_text(new_text, encoding="utf-8")
+
+
+def _write_backend_py_version(version: str) -> None:
+    content = f'__version__ = "{version}"\n'
+    BACKEND_VERSION.write_text(content, encoding="utf-8")
 
 
 def _write_readme_badge_version(version: str) -> None:
@@ -122,6 +143,7 @@ def apply_version(version: str) -> None:
     _parse_semver(version)
     _write_package_version(version)
     _write_pyproject_version(version)
+    _write_backend_py_version(version)
     _write_readme_badge_version(version)
 
 

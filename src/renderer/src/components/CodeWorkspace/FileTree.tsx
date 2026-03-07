@@ -1,5 +1,5 @@
-import { useState, useEffect, useRef, memo, useCallback } from 'react'
-import { FolderOpen, FolderClosed, FileCode, FileText, ChevronRight, ChevronDown, MoreHorizontal, Pencil, Trash2, Copy } from 'lucide-react'
+import { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react'
+import { FolderOpen, FolderClosed, FileCode, FileText, ChevronRight, ChevronDown, MoreHorizontal, Pencil, Trash2, Copy, Pin } from 'lucide-react'
 
 export interface TreeNode {
   name: string
@@ -14,6 +14,9 @@ interface FileTreeProps {
   onRename: (path: string, newName: string) => void
   onDelete: (path: string) => void
   activeFile: string | null
+  pinnedItems?: { id: string; type: 'file' | 'text'; name: string; content: string }[]
+  onTogglePin?: (item: { id: string; type: 'file' | 'text'; name: string; content: string }) => void
+  scoutIssues?: { file: string; type: 'error' | 'warning'; message: string }[]
 }
 
 const FILE_ICON_MAP: Record<string, string> = {
@@ -102,6 +105,9 @@ const TreeItem = memo(function TreeItem({
   onRename,
   onDelete,
   activeFile,
+  pinnedItems,
+  onTogglePin,
+  scoutIssues,
 }: {
   node: TreeNode
   depth: number
@@ -109,6 +115,9 @@ const TreeItem = memo(function TreeItem({
   onRename: (path: string, newName: string) => void
   onDelete: (path: string) => void
   activeFile: string | null
+  pinnedItems?: { id: string; type: 'file' | 'text'; name: string; content: string }[]
+  onTogglePin?: (item: { id: string; type: 'file' | 'text'; name: string; content: string }) => void
+  scoutIssues?: { file: string; type: 'error' | 'warning'; message: string }[]
 }) {
   const [expanded, setExpanded] = useState(depth < 1)
   const [renaming, setRenaming] = useState(false)
@@ -171,11 +180,34 @@ const TreeItem = memo(function TreeItem({
   }, [node.name, node.path, node.type, onDelete])
 
   const handleCopyPath = useCallback(() => {
-    navigator.clipboard.writeText(node.path).catch(() => {})
+    navigator.clipboard.writeText(node.path).catch(() => { })
   }, [node.path])
 
+  const handleTogglePin = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (!onTogglePin) return
+    try {
+      const { content } = await (window as any).apiClient.workspace.readFile(node.path)
+      onTogglePin({
+        id: node.path,
+        type: 'file',
+        name: node.name,
+        content
+      })
+    } catch (err) {
+      console.error('Failed to pin file:', err)
+    }
+  }, [node.path, node.name, onTogglePin])
+
+  const isPinned = pinnedItems?.some(it => it.id === node.path)
   const isActive = node.type === 'file' && node.path === activeFile
   const paddingLeft = 8 + depth * 16
+
+  // Scout Alert Logic
+  const hasScoutIssue = useMemo(() => {
+    if (!scoutIssues) return false
+    return scoutIssues.some(issue => node.path.endsWith(issue.file))
+  }, [scoutIssues, node.path])
 
   return (
     <>
@@ -185,9 +217,8 @@ const TreeItem = memo(function TreeItem({
         onClick={handleClick}
         onContextMenu={handleContextMenu}
         onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') handleClick() }}
-        className={`group flex items-center gap-1.5 py-[3px] pr-1 cursor-pointer text-[12px] transition-colors hover:bg-white/5 ${
-          isActive ? 'bg-blue-500/15 text-blue-300' : 'text-gray-400'
-        }`}
+        className={`group flex items-center gap-1.5 py-[3px] pr-1 cursor-pointer text-[12px] transition-colors hover:bg-white/5 ${isActive ? 'bg-blue-500/15 text-blue-300' : 'text-gray-400'
+          } ${hasScoutIssue ? 'animate-pulse bg-orange-500/10' : ''}`}
         style={{ paddingLeft }}
       >
         {node.type === 'dir' ? (
@@ -229,15 +260,31 @@ const TreeItem = memo(function TreeItem({
           />
         ) : (
           <>
-            <span className="truncate flex-1 min-w-0">{node.name}</span>
-            <button
-              type="button"
-              title="Actions"
-              onClick={handleDotsClick}
-              className="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-white/10 text-gray-600 hover:text-gray-300 transition-all shrink-0"
-            >
-              <MoreHorizontal size={12} />
-            </button>
+            <span className={`truncate flex-1 min-w-0 ${hasScoutIssue ? 'text-orange-400 font-medium' : ''}`}>{node.name}</span>
+            {hasScoutIssue && (
+              <div className="w-1.5 h-1.5 rounded-full bg-orange-500 shrink-0 shadow-[0_0_8px_rgba(249,115,22,0.6)]" title="Scout detected issues" />
+            )}
+            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+              {node.type === 'file' && (
+                <button
+                  type="button"
+                  title={isPinned ? 'Remove from context' : 'Add to context'}
+                  onClick={handleTogglePin}
+                  className={`p-0.5 rounded hover:bg-white/10 transition-colors ${isPinned ? 'text-blue-400' : 'text-gray-600 hover:text-gray-300'
+                    }`}
+                >
+                  <Pin size={12} className={isPinned ? 'fill-blue-400' : ''} />
+                </button>
+              )}
+              <button
+                type="button"
+                title="Actions"
+                onClick={handleDotsClick}
+                className="p-0.5 rounded hover:bg-white/10 text-gray-600 hover:text-gray-300 transition-all shrink-0"
+              >
+                <MoreHorizontal size={12} />
+              </button>
+            </div>
           </>
         )}
       </div>
@@ -262,13 +309,16 @@ const TreeItem = memo(function TreeItem({
           onRename={onRename}
           onDelete={onDelete}
           activeFile={activeFile}
+          pinnedItems={pinnedItems}
+          onTogglePin={onTogglePin}
+          scoutIssues={scoutIssues}
         />
       ))}
     </>
   )
 })
 
-export function FileTree({ tree, onFileSelect, onRename, onDelete, activeFile }: FileTreeProps) {
+export function FileTree({ tree, onFileSelect, onRename, onDelete, activeFile, pinnedItems, onTogglePin, scoutIssues }: FileTreeProps) {
   if (!tree) {
     return (
       <div className="flex items-center justify-center h-full text-xs text-gray-600">
@@ -288,6 +338,9 @@ export function FileTree({ tree, onFileSelect, onRename, onDelete, activeFile }:
           onRename={onRename}
           onDelete={onDelete}
           activeFile={activeFile}
+          pinnedItems={pinnedItems}
+          onTogglePin={onTogglePin}
+          scoutIssues={scoutIssues}
         />
       ))}
     </div>

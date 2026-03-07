@@ -3,9 +3,15 @@ from fastapi import APIRouter
 from pydantic import BaseModel, Field
 from typing import Optional
 from app.sandbox.service import SandboxService
+from app.sandbox.debugger import start_debugger_session
+import asyncio
+import json
+from fastapi.responses import StreamingResponse
 
 router = APIRouter()
 service = SandboxService()
+
+_active_debuggers = {}
 
 
 class RunRequest(BaseModel):

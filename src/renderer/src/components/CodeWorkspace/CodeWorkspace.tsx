@@ -2,8 +2,11 @@ import { useState, useEffect, useCallback, useRef, useLayoutEffect } from 'react
 import { X, Circle, Save, FolderSearch, Settings as SettingsIcon, FilePlus, PanelRightOpen, PanelRightClose } from 'lucide-react'
 import { FileTree } from './FileTree'
 import { MonacoEditor } from './MonacoEditor'
-import { DiffEditor } from './DiffEditor'
 import { AgentPanel } from './AgentPanel'
+import { InlineRewriteUI } from './InlineRewriteUI'
+import { DebuggerPanel } from './DebuggerPanel'
+import { useEnergyManager } from './useEnergyManager'
+import { useAgentSession } from './useAgentSession'
 import { apiClient } from '../../api/client'
 import type { TreeNode } from './FileTree'
 import type { DiffMetadata } from '../Terminal/types'
@@ -21,6 +24,8 @@ export function CodeWorkspace() {
   const [tree, setTree] = useState<TreeNode | null>(null)
   const [openFiles, setOpenFiles] = useState<OpenFile[]>([])
   const [activeFile, setActiveFile] = useState<string | null>(null)
+  const [debugSessionId, setDebugSessionId] = useState<string | null>(null)
+  const [debugState, setDebugState] = useState<any>(null)
   const [workspaceDir, setWorkspaceDir] = useState<string | null>(() =>
     localStorage.getItem('silicon-studio-workspace-dir')
   )
@@ -32,6 +37,17 @@ export function CodeWorkspace() {
   const newFileInputRef = useRef<HTMLInputElement>(null)
   const [agentPanelOpen, setAgentPanelOpen] = useState(true)
   const [pendingDiffs, setPendingDiffs] = useState<Map<string, DiffMetadata>>(new Map())
+  const [inlineRewrite, setInlineRewrite] = useState<{
+    selection: {
+      startLine: number
+      startColumn: number
+      endLine: number
+      endColumn: number
+      text: string
+    }
+    position: { x: number; y: number }
+  } | null>(null)
+
   // Ref to the AgentPanel's diff decider — lets DiffEditor trigger the same backend API + feed update
   const diffDeciderRef = useRef<((callId: string, approved: boolean, reason?: string) => void) | null>(null)
 
@@ -45,6 +61,115 @@ export function CodeWorkspace() {
     return saved ? Number(saved) : 384
   })
   const containerRef = useRef<HTMLDivElement>(null)
+
+  // Provide active file context to the agent panel (called at submit time via ref)
+  const openFilesRef = useRef(openFiles)
+  openFilesRef.current = openFiles
+  const activeFileRef = useRef(activeFile)
+  activeFileRef.current = activeFile
+  const getActiveFile = useCallback(() => {
+    const path = activeFileRef.current
+    if (!path) return null
+    const f = openFilesRef.current.find(of => of.path === path)
+    if (!f) return null
+    return { path: f.path, content: f.content, language: f.language }
+  }, [])
+
+  const workspaceDirRef = useRef(workspaceDir)
+  workspaceDirRef.current = workspaceDir
+  const getWorkspaceDir = useCallback(() => workspaceDirRef.current, [])
+
+  // --- Agent Session ---
+  const { lowPowerMode } = useEnergyManager()
+
+  const {
+    feedItems,
+    isRunning,
+    sessionId,
+    telemetry,
+    activeModel,
+    handleSubmit,
+    handleStop,
+    handleDiffDecided: rawHandleDiffDecided,
+    handleEscalationResponded,
+    handleUndo,
+    agentMode,
+    setAgentMode,
+    clearHistory,
+    togglePin,
+    pinnedItems, // Restored pinnedItems
+    scoutIssues,
+  } = useAgentSession({
+    onDiffProposal: (path, meta) => {
+      handleFileSelect(path)
+      handleDiffProposal(path, { ...meta, status: 'pending' })
+    },
+    getActiveFile,
+    getWorkspaceDir,
+    lowPowerMode
+  })
+
+  // --- File operations (moved up to avoid declaration order issues) ---
+  const handleSave = useCallback(async (path: string, content: string) => {
+    try {
+      await apiClient.workspace.saveFile(path, content)
+      setOpenFiles(prev => prev.map(f =>
+        f.path === path ? { ...f, dirty: false, savedContent: content, content } : f
+      ))
+      setSaveStatus('Saved')
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = setTimeout(() => setSaveStatus(null), 2000)
+    } catch {
+      setSaveStatus('Save failed')
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
+      saveTimerRef.current = setTimeout(() => setSaveStatus(null), 3000)
+    }
+  }, [])
+
+  const handleContentChange = useCallback((path: string, content: string) => {
+    setOpenFiles(prev => prev.map(f =>
+      f.path === path ? { ...f, content, dirty: content !== f.savedContent } : f
+    ))
+  }, [])
+
+  // --- Diff Approval / Rejection logic (moved up to avoid declaration order issues) ---
+  const handleDiffApprove = useCallback((filePath: string, fromAgent = false) => {
+    const diff = pendingDiffs.get(filePath)
+    if (!diff) return
+    setOpenFiles(prev => prev.map(f =>
+      f.path === filePath ? { ...f, content: diff.newContent, dirty: true } : f
+    ))
+    setPendingDiffs(prev => {
+      const next = new Map(prev)
+      next.delete(filePath)
+      return next
+    })
+    handleSave(filePath, diff.newContent)
+    if (!fromAgent) {
+      diffDeciderRef.current?.(diff.callId, true)
+    }
+  }, [pendingDiffs, handleSave])
+
+  const handleDiffReject = useCallback((filePath: string, reason?: string, fromAgent = false) => {
+    const diff = pendingDiffs.get(filePath)
+    setPendingDiffs(prev => {
+      const next = new Map(prev)
+      next.delete(filePath)
+      return next
+    })
+    if (!fromAgent && diff) {
+      diffDeciderRef.current?.(diff.callId, false, reason)
+    }
+  }, [pendingDiffs])
+
+  // Sync: when agent panel's HolographicDiff approve/reject fires, mirror it here (fromAgent=true avoids loop)
+  const handleDiffSynced = useCallback((filePath: string, approved: boolean) => {
+    if (approved) {
+      handleDiffApprove(filePath, true)
+    } else {
+      handleDiffReject(filePath, undefined, true)
+    }
+  }, [handleDiffApprove, handleDiffReject])
 
   // Persist widths
   useLayoutEffect(() => {
@@ -89,23 +214,6 @@ export function CodeWorkspace() {
     startDrag(setAgentWidth, 'right', 280, 700, e.clientX, agentWidth)
   }, [agentWidth, startDrag])
 
-  // Provide active file context to the agent panel (called at submit time via ref)
-  const openFilesRef = useRef(openFiles)
-  openFilesRef.current = openFiles
-  const activeFileRef = useRef(activeFile)
-  activeFileRef.current = activeFile
-  const getActiveFile = useCallback(() => {
-    const path = activeFileRef.current
-    if (!path) return null
-    const f = openFilesRef.current.find(of => of.path === path)
-    if (!f) return null
-    return { path: f.path, content: f.content, language: f.language }
-  }, [])
-
-  const workspaceDirRef = useRef(workspaceDir)
-  workspaceDirRef.current = workspaceDir
-  const getWorkspaceDir = useCallback(() => workspaceDirRef.current, [])
-
   // Listen for workspace directory changes from Settings
   useEffect(() => {
     const handler = (e: Event) => {
@@ -114,6 +222,16 @@ export function CodeWorkspace() {
     }
     window.addEventListener('workspace-dir-changed', handler)
     return () => window.removeEventListener('workspace-dir-changed', handler)
+  }, [])
+
+  // Listen for inline edit trigger from Monaco (Cmd+K)
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const data = (e as CustomEvent).detail
+      setInlineRewrite(data)
+    }
+    window.addEventListener('nanocore-inline-edit', handler)
+    return () => window.removeEventListener('nanocore-inline-edit', handler)
   }, [])
 
   // Load file tree when workspace dir changes
@@ -182,27 +300,36 @@ export function CodeWorkspace() {
     })
   }, [activeFile])
 
-  const handleSave = useCallback(async (path: string, content: string) => {
-    try {
-      await apiClient.workspace.saveFile(path, content)
-      setOpenFiles(prev => prev.map(f =>
-        f.path === path ? { ...f, dirty: false, savedContent: content, content } : f
-      ))
-      setSaveStatus('Saved')
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-      saveTimerRef.current = setTimeout(() => setSaveStatus(null), 2000)
-    } catch {
-      setSaveStatus('Save failed')
-      if (saveTimerRef.current) clearTimeout(saveTimerRef.current)
-      saveTimerRef.current = setTimeout(() => setSaveStatus(null), 3000)
+  // --- Debug listener ---
+  useEffect(() => {
+    const handler = async (e: Event) => {
+      const { code, path } = (e as CustomEvent).detail
+      try {
+        const res = await apiClient.sandbox.startDebug(code, path)
+        if (res.session_id) {
+          setDebugSessionId(res.session_id)
+        }
+      } catch (err) {
+        console.error('Failed to start debugger:', err)
+      }
     }
+    window.addEventListener('nanocore-debug', handler as any)
+    return () => window.removeEventListener('nanocore-debug', handler as any)
   }, [])
 
-  const handleContentChange = useCallback((path: string, content: string) => {
-    setOpenFiles(prev => prev.map(f =>
-      f.path === path ? { ...f, content, dirty: content !== f.savedContent } : f
-    ))
-  }, [])
+  // --- Terminal Auto-Iniezione ---
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { command, output, exitCode } = (e as CustomEvent).detail
+      const fixPrompt = `Command failed with exit code ${exitCode}: \`${command}\`\n\nOutput:\n\`\`\`\n${output}\n\`\`\`\n\nPlease analyze and fix.`
+      handleSubmit(fixPrompt)
+    }
+    window.addEventListener('nanocore-terminal-error', handler as any)
+    return () => window.removeEventListener('nanocore-terminal-error', handler as any)
+  }, [handleSubmit])
+
+
+  // --- File operations ---
 
   const handleCreateFile = useCallback(async () => {
     const name = newFileName.trim()
@@ -275,50 +402,7 @@ export function CodeWorkspace() {
     }
   }, [activeFile, refreshTree])
 
-  // Diff approval: apply the new content to the file + notify backend
-  const handleDiffApprove = useCallback((filePath: string, fromAgent = false) => {
-    const diff = pendingDiffs.get(filePath)
-    if (!diff) return
-    // Update editor content with the new content
-    setOpenFiles(prev => prev.map(f =>
-      f.path === filePath ? { ...f, content: diff.newContent, dirty: true } : f
-    ))
-    // Remove the pending diff
-    setPendingDiffs(prev => {
-      const next = new Map(prev)
-      next.delete(filePath)
-      return next
-    })
-    // Auto-save
-    handleSave(filePath, diff.newContent)
-    // If triggered from the DiffEditor (not from AgentPanel sync), also notify backend + update feed
-    if (!fromAgent) {
-      diffDeciderRef.current?.(diff.callId, true)
-    }
-  }, [pendingDiffs, handleSave])
-
-  // Diff rejection: remove the pending diff + notify backend
-  const handleDiffReject = useCallback((filePath: string, reason?: string, fromAgent = false) => {
-    const diff = pendingDiffs.get(filePath)
-    setPendingDiffs(prev => {
-      const next = new Map(prev)
-      next.delete(filePath)
-      return next
-    })
-    // If triggered from the DiffEditor (not from AgentPanel sync), also notify backend + update feed
-    if (!fromAgent && diff) {
-      diffDeciderRef.current?.(diff.callId, false, reason)
-    }
-  }, [pendingDiffs])
-
-  // Sync: when agent panel's HolographicDiff approve/reject fires, mirror it here (fromAgent=true avoids loop)
-  const handleDiffSynced = useCallback((filePath: string, approved: boolean) => {
-    if (approved) {
-      handleDiffApprove(filePath, true)
-    } else {
-      handleDiffReject(filePath, undefined, true)
-    }
-  }, [handleDiffApprove, handleDiffReject])
+  // (Logic moved up)
 
   const handleRegisterDiffDecider = useCallback((decider: (callId: string, approved: boolean, reason?: string) => void) => {
     diffDeciderRef.current = decider
@@ -362,11 +446,10 @@ export function CodeWorkspace() {
             tabIndex={0}
             onClick={() => setActiveFile(f.path)}
             onKeyDown={(e) => { if (e.key === 'Enter') setActiveFile(f.path) }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-white/5 cursor-pointer shrink-0 transition-colors ${
-              f.path === activeFile
-                ? 'bg-[#1e1e1e] text-white'
-                : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
-            }`}
+            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs border-r border-white/5 cursor-pointer shrink-0 transition-colors ${f.path === activeFile
+              ? 'bg-[#1e1e1e] text-white'
+              : 'text-gray-500 hover:text-gray-300 hover:bg-white/5'
+              }`}
           >
             {f.dirty && <Circle size={6} className="text-blue-400 fill-blue-400" />}
             {pendingDiffs.has(f.path) && <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />}
@@ -451,7 +534,16 @@ export function CodeWorkspace() {
               </button>
             </div>
           ) : (
-            <FileTree tree={tree} onFileSelect={handleFileSelect} onRename={handleRenameFile} onDelete={handleDeleteFile} activeFile={activeFile} />
+            <FileTree
+              tree={tree}
+              onFileSelect={handleFileSelect}
+              onRename={handleRenameFile}
+              onDelete={handleDeleteFile}
+              activeFile={activeFile}
+              pinnedItems={pinnedItems}
+              onTogglePin={togglePin}
+              scoutIssues={scoutIssues}
+            />
           )}
         </div>
 
@@ -462,32 +554,80 @@ export function CodeWorkspace() {
           className="w-1 shrink-0 cursor-col-resize hover:bg-blue-500/30 active:bg-blue-500/50 transition-colors"
         />
 
-        {/* Editor area */}
-        <div className="flex-1 min-w-0">
-          {active ? (
-            activeDiff ? (
-              <DiffEditor
-                key={`diff-${active.path}`}
-                filePath={active.path}
-                originalContent={activeDiff.oldContent}
-                modifiedContent={activeDiff.newContent}
-                language={active.language}
-                onApprove={() => handleDiffApprove(active.path)}
-                onReject={(reason) => handleDiffReject(active.path, reason)}
-              />
+        {/* Monaco editor area with relative positioning for inline UI */}
+        <div className="flex-1 min-w-0 flex flex-col">
+          <div className="flex-1 relative">
+            {active ? (
+              <>
+                <MonacoEditor
+                  key={active.path}
+                  filePath={active.path}
+                  content={activeDiff ? activeDiff.newContent : active.content}
+                  language={active.language}
+                  onSave={handleSave}
+                  onChange={(content) => handleContentChange(active.path, content)}
+                  originalContent={activeDiff ? activeDiff.oldContent : null}
+                  activeModelId={activeModel?.id}
+                  debugLine={debugState?.line}
+                />
+
+                {activeDiff && (
+                  <div className="absolute top-10 right-10 z-50 flex items-center gap-2 p-1.5 bg-[#1a1a1a]/90 border border-amber-500/30 rounded-lg shadow-2xl backdrop-blur-md">
+                    <div className="px-2 py-0.5 bg-amber-500/10 rounded text-[10px] font-bold text-amber-500 uppercase tracking-tighter">
+                      Proposed Change
+                    </div>
+                    <button
+                      onClick={() => handleDiffApprove(active.path)}
+                      className="flex items-center gap-1.5 px-3 py-1 bg-green-600 hover:bg-green-500 text-white text-[11px] font-bold rounded transiton-all"
+                    >
+                      Accept
+                    </button>
+                    <button
+                      onClick={() => handleDiffReject(active.path)}
+                      className="px-3 py-1 bg-white/5 hover:bg-white/10 text-gray-300 text-[11px] font-medium rounded transition-all"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                )}
+
+                {inlineRewrite && (
+                  <div
+                    className="absolute z-50 pointer-events-auto"
+                    style={{
+                      left: Math.max(20, Math.min(window.innerWidth - 450, inlineRewrite.position.x)),
+                      top: Math.max(20, Math.min(window.innerHeight - 200, inlineRewrite.position.y))
+                    }}
+                  >
+                    <InlineRewriteUI
+                      selection={inlineRewrite.selection}
+                      onClose={() => setInlineRewrite(null)}
+                      onSubmit={(prompt) => {
+                        const fullPrompt = `Edit this code: ${prompt}\n\n\`\`\`\n${inlineRewrite.selection.text}\n\`\`\``
+                        window.dispatchEvent(new CustomEvent('nanocore-prompt', { detail: fullPrompt }))
+                        setInlineRewrite(null)
+                      }}
+                      isRunning={false}
+                    />
+                  </div>
+                )}
+              </>
             ) : (
-              <MonacoEditor
-                key={active.path}
-                filePath={active.path}
-                content={active.content}
-                language={active.language}
-                onSave={handleSave}
-                onChange={(content) => handleContentChange(active.path, content)}
+              <div className="h-full flex items-center justify-center bg-[#1e1e1e]">
+                <p className="text-sm text-gray-600">Select a file to open</p>
+              </div>
+            )}
+          </div>
+          {debugSessionId && (
+            <div className="h-64 border-t border-white/5 bg-[#1a1a1a] shrink-0">
+              <DebuggerPanel
+                sessionId={debugSessionId}
+                onStop={() => {
+                  setDebugSessionId(null)
+                  setDebugState(null)
+                }}
+                onUpdateState={(state) => setDebugState(state)}
               />
-            )
-          ) : (
-            <div className="h-full flex items-center justify-center bg-[#1e1e1e]">
-              <p className="text-sm text-gray-600">Select a file to open</p>
             </div>
           )}
         </div>
@@ -495,14 +635,38 @@ export function CodeWorkspace() {
         {/* Agent panel resize handle + panel */}
         {agentPanelOpen && (
           <>
-          <div
-            role="separator"
-            onMouseDown={handleAgentDrag}
-            className="w-1 shrink-0 cursor-col-resize hover:bg-blue-500/30 active:bg-blue-500/50 transition-colors"
-          />
-          <div style={{ width: agentWidth }} className="border-l border-white/5 shrink-0 overflow-hidden">
-            <AgentPanel onOpenFile={handleAgentOpenFile} onDiffProposal={handleDiffProposal} onDiffSynced={handleDiffSynced} onRegisterDiffDecider={handleRegisterDiffDecider} getActiveFile={getActiveFile} getWorkspaceDir={getWorkspaceDir} />
-          </div>
+            <div
+              role="separator"
+              onMouseDown={handleAgentDrag}
+              className="w-1 shrink-0 cursor-col-resize hover:bg-blue-500/30 active:bg-blue-500/50 transition-colors"
+            />
+            <div style={{ width: agentWidth }} className="border-l border-white/5 shrink-0 overflow-hidden">
+              <AgentPanel
+                onOpenFile={handleAgentOpenFile}
+                onDiffProposal={handleDiffProposal}
+                onDiffSynced={handleDiffSynced}
+                onRegisterDiffDecider={handleRegisterDiffDecider}
+                getActiveFile={getActiveFile}
+                getWorkspaceDir={getWorkspaceDir}
+                session={{
+                  feedItems,
+                  isRunning,
+                  sessionId,
+                  telemetry,
+                  activeModel,
+                  handleSubmit,
+                  handleStop,
+                  handleDiffDecided: rawHandleDiffDecided,
+                  handleEscalationResponded,
+                  handleUndo,
+                  agentMode,
+                  setAgentMode,
+                  clearHistory,
+                  pinnedItems,
+                  togglePin,
+                }}
+              />
+            </div>
           </>
         )}
       </div>
