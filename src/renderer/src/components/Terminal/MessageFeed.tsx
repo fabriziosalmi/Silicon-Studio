@@ -10,6 +10,8 @@ const TOOL_BLOCK_RE = /<tool\s+name="[^"]*">[\s\S]*?<\/tool>/g
 const STRAY_TAG_RE = /<\/?(?:tool|arg)\b[^>]*>/g
 // Strip <think>...</think> reasoning blocks from models like Qwen3
 const THINK_BLOCK_RE = /<think>[\s\S]*?<\/think>/g
+// Also strip incomplete think blocks (model stopped mid-think)
+const INCOMPLETE_THINK_RE = /<think>[\s\S]*$/g
 const STRAY_THINK_RE = /<\/?think[^>]*>/g
 
 function stripModelTags(text: string): string {
@@ -17,6 +19,7 @@ function stripModelTags(text: string): string {
     .replace(TOOL_BLOCK_RE, '')
     .replace(STRAY_TAG_RE, '')
     .replace(THINK_BLOCK_RE, '')
+    .replace(INCOMPLETE_THINK_RE, '')
     .replace(STRAY_THINK_RE, '')
     .trim()
 }

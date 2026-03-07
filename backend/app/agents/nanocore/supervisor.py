@@ -30,6 +30,7 @@ logger = logging.getLogger(__name__)
 
 # Strip <think>...</think> blocks and any leftover tags from model output
 _THINK_RE = re.compile(r'<think>.*?</think>', re.DOTALL)
+_THINK_INCOMPLETE_RE = re.compile(r'<think>.*$', re.DOTALL)  # unclosed think block at end
 _THINK_OPEN_RE = re.compile(r'</?think[^>]*>')
 
 # Max chars of tool output to inject back into the conversation
@@ -43,6 +44,7 @@ MAX_AUTO_RETRIES = 3
 def _strip_think_tags(text: str) -> str:
     """Remove <think>...</think> blocks and stray tags from model output."""
     text = _THINK_RE.sub('', text)
+    text = _THINK_INCOMPLETE_RE.sub('', text)
     text = _THINK_OPEN_RE.sub('', text)
     return text.strip()
 
