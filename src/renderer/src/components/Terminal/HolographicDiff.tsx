@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Check, X, Send, ChevronRight } from 'lucide-react'
 import { apiClient } from '../../api/client'
 import type { DiffMetadata } from './types'
@@ -16,6 +16,15 @@ export function HolographicDiff({ meta, sessionId, onDecided }: HolographicDiffP
   const isPending = meta.status === 'pending'
   // Collapse diff body after decision
   const [expanded, setExpanded] = useState(true)
+  const prevStatusRef = useRef(meta.status)
+
+  // Auto-collapse when status changes externally (e.g. inline editor approve)
+  useEffect(() => {
+    if (prevStatusRef.current === 'pending' && meta.status !== 'pending') {
+      setExpanded(false)
+    }
+    prevStatusRef.current = meta.status
+  }, [meta.status])
 
   const handleDecide = async (approved: boolean, reason: string = '') => {
     if (deciding) return

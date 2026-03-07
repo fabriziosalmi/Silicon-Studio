@@ -108,9 +108,11 @@ export function AgentPanel({ onDiffSynced, onRegisterDiffDecider, session }: Age
                 </div>
               </div>
             )}
-            <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[9px] font-bold text-emerald-400 uppercase tracking-tight">
-              <ShieldCheck size={10} />
-              <span>Local Execution Only</span>
+            <div
+              className="p-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+              title="Local Execution Only"
+            >
+              <ShieldCheck size={12} />
             </div>
             <div className="flex items-center gap-0.5">
               <button

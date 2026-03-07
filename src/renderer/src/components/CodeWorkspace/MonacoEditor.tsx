@@ -166,11 +166,11 @@ export function MonacoEditor({ filePath, content, language, onSave, onChange, or
 
     // Context menu actions for selected code → agent
     const actions = [
-      { id: 'nano.explain', label: 'NanoCore: Explain This', prompt: 'explain this code:' },
-      { id: 'nano.fix', label: 'NanoCore: Fix This', prompt: 'fix this code:' },
-      { id: 'nano.refactor', label: 'NanoCore: Refactor', prompt: 'refactor this code:' },
-      { id: 'nano.tests', label: 'NanoCore: Write Tests', prompt: 'write tests for this code:' },
-      { id: 'nano.optimize', label: 'NanoCore: Optimize', prompt: 'optimize this code:' },
+      { id: 'nano.explain', label: '🧠 Explain This', prompt: 'explain this code:' },
+      { id: 'nano.fix', label: '🧠 Fix This', prompt: 'fix this code:' },
+      { id: 'nano.refactor', label: '🧠 Refactor', prompt: 'refactor this code:' },
+      { id: 'nano.tests', label: '🧠 Write Tests', prompt: 'write tests for this code:' },
+      { id: 'nano.optimize', label: '🧠 Optimize', prompt: 'optimize this code:' },
     ]
 
     for (const action of actions) {
