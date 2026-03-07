@@ -1,5 +1,55 @@
 # Changelog
 
+## v0.9.2
+
+### UI Polish
+- Sidebar diff auto-collapses when inline Accept/Reject is used
+- "LOCAL EXECUTION ONLY" badge reduced to compact shield icon with tooltip
+- Context menu: removed redundant "NanoCore:" prefix, added brain icon per action
+- Fixed crash when clicking files in Code panel (`useHolographicDiff` null editor guard)
+
+### Bug Fixes
+- Fixed Python 3.14 conditional import shadowing across backend (`mx`, `re`, `tempfile`, `os`, `sys`)
+- Fixed missing model directory error with clear message instead of cryptic HF repo ID error
+- Fixed npm audit vulnerabilities (tar, minimatch)
+
+## v0.9.1
+
+### Swarm Progress Events
+- Real-time SSE events for MoA swarm map/reduce phases
+- Frontend shows pulsing status for each expert during swarm execution
+
+### Enriched Session Summary
+- Agent `done` event now includes iteration count and edits count
+
+### Security
+- Air-gapped web search blocking verification
+- npm dependency audit fixes
+
+## v0.9.0
+
+### Phase 8 — UX
+- Context health bar (token usage indicator)
+- Energy manager (low-power mode)
+- Pinned context items
+- Scout issues panel
+
+### Phase 9 — Architecture
+- Agent mode toggle (edit/review)
+- Undo support for agent edits
+- Emergency stop shortcut (Cmd+Esc)
+- Agency HUD (Architetto/Operaio/Ispettore roles)
+
+### Phase 10 — MoA Swarm
+- Map-Reduce Mixture of Agents orchestrator
+- Security, Performance, and Syntax expert personas
+- Lead Developer Synthesizer reducer
+
+### Phase 11 — Agent Capabilities
+- Codebase indexing and search tools
+- Escalation flow with user-in-the-loop
+- Auto-retry with self-healing on tool failures
+
 ## v0.7.4
 
 ### PII Redaction Settings
