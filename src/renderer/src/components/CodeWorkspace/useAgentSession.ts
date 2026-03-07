@@ -477,6 +477,26 @@ export function useAgentSession(options?: UseAgentSessionOptions) {
             }
           })
           break
+        case 'swarm_progress': {
+          const expert = d.expert as string
+          const phase = d.phase as string
+          const status = d.status as string
+          const label = status === 'started'
+            ? `Swarm: ${phase === 'reduce' ? 'Synthesizing' : `Expert "${expert}"`} running...`
+            : `Swarm: ${phase === 'reduce' ? 'Synthesis' : `Expert "${expert}"`} complete`
+          // Replace previous swarm_progress item to avoid clutter
+          setFeedItems((prev) => {
+            const filtered = prev.filter((it) => it.type !== 'swarm_progress')
+            return [...filtered, {
+              id: crypto.randomUUID(),
+              type: 'swarm_progress' as const,
+              content: label,
+              timestamp: Date.now(),
+            }]
+          })
+          break
+        }
+
         case 'error':
           addFeedItem({ id: crypto.randomUUID(), type: 'error', content: d.message as string, timestamp: Date.now() })
           break
@@ -484,12 +504,16 @@ export function useAgentSession(options?: UseAgentSessionOptions) {
         case 'done': {
           const tokens = d.total_tokens as number
           const ms = d.total_time_ms as number
+          const iterations = d.iterations as number
+          const edits = d.edits as number
           const parts: string[] = []
           if (tokens > 0) parts.push(`${tokens.toLocaleString()} tokens`)
           parts.push(`${Math.round(ms / 1000)}s`)
-          // Remove step_label and thinking, add done info
+          if (iterations > 0) parts.push(`${iterations} iter`)
+          if (edits > 0) parts.push(`${edits} edit${edits > 1 ? 's' : ''}`)
+          // Remove step_label, thinking, and swarm_progress; add done info
           setFeedItems((prev) => [
-            ...prev.filter((it) => it.type !== 'step_label' && it.type !== 'thinking'),
+            ...prev.filter((it) => it.type !== 'step_label' && it.type !== 'thinking' && it.type !== 'swarm_progress'),
             {
               id: crypto.randomUUID(),
               type: 'info' as const,

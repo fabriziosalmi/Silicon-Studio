@@ -15,6 +15,7 @@ export type FeedItemType =
   | 'agency_trace'
   | 'rag_search'
   | 'scout_alert'
+  | 'swarm_progress'
 
 export interface DiffMetadata {
   callId: string

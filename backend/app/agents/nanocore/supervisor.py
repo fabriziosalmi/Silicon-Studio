@@ -1149,10 +1149,18 @@ class SupervisorAgent:
                         continue
                         
                     try:
-                        # Instantiate the swarm using the supervisor's active model
-                        swarm = MapReduceSwarm(self.model_id)
-                        # Map-Reduce invocation
+                        swarm_events: list[dict] = []
+
+                        async def _swarm_progress(phase: str, expert_id: str, status: str):
+                            swarm_events.append({"phase": phase, "expert": expert_id, "status": status})
+
+                        swarm = MapReduceSwarm(self.model_id, on_progress=_swarm_progress)
                         result = await swarm.run_swarm(topic=topic, context=context)
+
+                        # Flush accumulated progress events
+                        for evt in swarm_events:
+                            yield _sse("swarm_progress", {**evt, "call_id": call_id})
+
                         yield _sse("tool_done", {"call_id": call_id, "exit_code": 0})
                         tool_results.append(f"[ask_swarm_experts]\n{result}")
                     except Exception as e:
@@ -1189,4 +1197,6 @@ class SupervisorAgent:
             "summary": f"Completed in {iteration} iteration(s)",
             "total_tokens": self._total_tokens,
             "total_time_ms": round(elapsed_ms),
+            "iterations": iteration,
+            "edits": len(self._edit_history),
         })

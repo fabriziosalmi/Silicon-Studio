@@ -438,6 +438,14 @@ const FeedItemView = memo(function FeedItemView({
         </div>
       )
 
+    case 'swarm_progress':
+      return (
+        <div className="flex items-center gap-2 py-0.5">
+          <div className="w-1.5 h-1.5 bg-purple-400 rounded-full animate-pulse" />
+          <span className="text-[11px] text-purple-400/70 font-mono">{item.content}</span>
+        </div>
+      )
+
     case 'human_escalation':
       return item.escalationMeta ? (
         <EscalationCard
